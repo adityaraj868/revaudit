@@ -32,7 +32,9 @@ class BaselineModelResult:
         return {
             "r_squared": round(self.r_squared, 3),
             "beta_workload": round(self.beta_workload, 2),
+            "workload_drag_beta": round(self.beta_workload, 2),
             "beta_churn": round(self.beta_churn, 4),
+            "churn_drag_beta": round(self.beta_churn, 4),
             "beta_files": round(self.beta_files, 2),
             "beta_first_time": round(self.beta_first_time, 2),
             "intercept": round(self.intercept, 2),

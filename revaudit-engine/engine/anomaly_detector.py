@@ -97,46 +97,57 @@ def find_pairwise_discrepancies(
                 workload_diff = int(slow_pr.get("workload", 5) - fast_pr.get("workload", 1))
                 comment_diff = int(slow_pr.get("inline_comment_count", 8) - fast_pr.get("inline_comment_count", 0))
 
+                fast_pr_summary = {
+                    "pr_id": fast_pr.get("pr_id"),
+                    "number": fast_pr.get("number"),
+                    "title": fast_pr.get("title"),
+                    "author": fast_pr.get("author_id", fast_pr.get("author")),
+                    "lines_added": fast_pr.get("lines_added"),
+                    "lines_deleted": fast_pr.get("lines_deleted"),
+                    "files_changed": fast_pr.get("files_changed"),
+                    "latency_hrs": round(fast_lat, 2),
+                    "observed_latency_hrs": round(fast_lat, 2),
+                    "workload": fast_pr.get("workload"),
+                    "inline_comment_count": fast_pr.get("inline_comment_count", 0),
+                    "total_review_rounds": fast_pr.get("review_rounds", 1),
+                    "verdict": fast_pr.get("audit_verdict", "Fast-Tracked Flow"),
+                    "audit_verdict": fast_pr.get("audit_verdict", "Fast-Tracked Flow"),
+                    "verdict_badge": fast_pr.get("verdict_badge", "fast_tracked")
+                }
+
+                delayed_pr_summary = {
+                    "pr_id": slow_pr.get("pr_id"),
+                    "number": slow_pr.get("number"),
+                    "title": slow_pr.get("title"),
+                    "author": slow_pr.get("author_id", slow_pr.get("author")),
+                    "lines_added": slow_pr.get("lines_added"),
+                    "lines_deleted": slow_pr.get("lines_deleted"),
+                    "files_changed": slow_pr.get("files_changed"),
+                    "latency_hrs": round(slow_lat, 2),
+                    "observed_latency_hrs": round(slow_lat, 2),
+                    "workload": slow_pr.get("workload"),
+                    "inline_comment_count": slow_pr.get("inline_comment_count", 12),
+                    "total_review_rounds": slow_pr.get("review_rounds", 3),
+                    "verdict": slow_pr.get("audit_verdict", "Delayed vs. Repo Normal"),
+                    "audit_verdict": slow_pr.get("audit_verdict", "Delayed vs. Repo Normal"),
+                    "verdict_badge": slow_pr.get("verdict_badge", "delayed")
+                }
+
                 discrepancy_pairs.append({
                     "cohort_name": cohort["name"],
+                    "churn_bracket": cohort["name"],
                     "size_range": f"{cohort['min']}–{cohort['max']} lines",
                     "churn_fast": churn_fast,
                     "churn_slow": churn_slow,
                     "churn_diff_pct": round(churn_diff_pct * 100, 1),
                     "disparity_ratio": ratio,
                     "time_diff_hours": time_diff,
+                    "disparity_hours": time_diff,
                     "workload_diff": workload_diff,
                     "comment_diff": comment_diff,
-                    "fast_pr": {
-                        "pr_id": fast_pr.get("pr_id"),
-                        "number": fast_pr.get("number"),
-                        "title": fast_pr.get("title"),
-                        "author": fast_pr.get("author_id", fast_pr.get("author")),
-                        "lines_added": fast_pr.get("lines_added"),
-                        "lines_deleted": fast_pr.get("lines_deleted"),
-                        "files_changed": fast_pr.get("files_changed"),
-                        "observed_latency_hrs": round(fast_lat, 2),
-                        "workload": fast_pr.get("workload"),
-                        "inline_comment_count": fast_pr.get("inline_comment_count", 0),
-                        "total_review_rounds": fast_pr.get("review_rounds", 1),
-                        "audit_verdict": fast_pr.get("audit_verdict", "Fast-Tracked Flow"),
-                        "verdict_badge": fast_pr.get("verdict_badge", "fast_tracked")
-                    },
-                    "delayed_pr": {
-                        "pr_id": slow_pr.get("pr_id"),
-                        "number": slow_pr.get("number"),
-                        "title": slow_pr.get("title"),
-                        "author": slow_pr.get("author_id", slow_pr.get("author")),
-                        "lines_added": slow_pr.get("lines_added"),
-                        "lines_deleted": slow_pr.get("lines_deleted"),
-                        "files_changed": slow_pr.get("files_changed"),
-                        "observed_latency_hrs": round(slow_lat, 2),
-                        "workload": slow_pr.get("workload"),
-                        "inline_comment_count": slow_pr.get("inline_comment_count", 12),
-                        "total_review_rounds": slow_pr.get("review_rounds", 3),
-                        "audit_verdict": slow_pr.get("audit_verdict", "Delayed vs. Repo Normal"),
-                        "verdict_badge": slow_pr.get("verdict_badge", "delayed")
-                    },
+                    "fast_pr": fast_pr_summary,
+                    "delayed_pr": delayed_pr_summary,
+                    "stalled_pr": delayed_pr_summary,
                     "root_cause_diagnosis": (
                         f"Both pull requests contain identical patch complexity (~{round((churn_fast+churn_slow)/2)} lines), "
                         f"yet PR {slow_pr.get('number', slow_pr.get('pr_id'))} waited {time_diff}h longer ({ratio}x discrepancy) "
@@ -258,6 +269,7 @@ def audit_repository_pull_requests(
 
     return {
         "repo_name": repo_name,
+        "sample_size": total_prs,
         "total_prs_analyzed": total_prs,
         "repo_internal_baseline": baseline_result.to_dict(),
         "observed_mean_latency_hrs": observed_mean,
@@ -278,6 +290,7 @@ def audit_repository_pull_requests(
         "avg_reviewer_workload": avg_workload,
         "avg_lines_added": avg_lines,
         "first_time_contributor_pct": first_time_pct,
+        "peer_discrepancies": pairwise_discrepancies,
         "pairwise_discrepancies": pairwise_discrepancies,
         "prs": annotated_prs,
         "pr_records": annotated_prs
