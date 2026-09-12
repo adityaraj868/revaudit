@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import Navbar from './components/Navbar';
+import HomeView from './components/HomeView';
 import { 
   BarChart3, 
   GitPullRequest, 
@@ -11,9 +13,9 @@ import {
   Layers, 
   Search, 
   FileText, 
-  Sparkles,
-  ChevronRight,
-  Code
+  Sparkles, 
+  ChevronRight, 
+  Code 
 } from 'lucide-react';
 
 // Embedded PlantUML diagrams for interactive inspection
@@ -129,12 +131,53 @@ StatisticalModel ..> PullRequest : analyzes
 };
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('presentation'); // 'presentation' | 'demo'
+  // Read initial route from URL hash if available, defaulting to 'home'
+  const getInitialTab = () => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
+      if (hash === 'home' || hash === 'project' || hash === 'presentation') {
+        return hash;
+      }
+      if (hash === 'demo') return 'project';
+    }
+    return 'home';
+  };
+
+  const [activeTab, setActiveTab] = useState(getInitialTab);
   const [repoInput, setRepoInput] = useState('fastapi/fastapi');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [auditData, setAuditData] = useState(null);
   const [expandedDiagram, setExpandedDiagram] = useState(null);
+
+  // Sync tab navigation with window.location.hash
+  const handleNavigate = (tab) => {
+    setActiveTab(tab);
+    if (typeof window !== 'undefined') {
+      window.location.hash = tab;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  // Listen for browser forward/back buttons
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
+      if (hash === 'home' || hash === 'project' || hash === 'presentation') {
+        setActiveTab(hash);
+      } else if (hash === 'demo') {
+        setActiveTab('project');
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const handleQuickAudit = (repo) => {
+    setRepoInput(repo);
+    handleNavigate('project');
+    handleRunAudit(repo);
+  };
 
   // Helper to parse owner/repo from URL or string
   const parseRepo = (input) => {
@@ -176,56 +219,20 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
-      {/* Top Header & Navigation Bar */}
-      <header className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="bg-indigo-600 text-white p-2 rounded-lg shadow-sm">
-              <BarChart3 className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="text-xl font-bold tracking-tight text-slate-900">RevAudit</span>
-                <span className="text-xs bg-indigo-50 text-indigo-700 font-semibold px-2 py-0.5 rounded-full border border-indigo-200">
-                  Team ArchCoders
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 hidden sm:block">GitHub PR Review Effort Anomaly Engine</p>
-            </div>
-          </div>
-
-          {/* Navigation Tabs */}
-          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-            <button
-              onClick={() => setActiveTab('presentation')}
-              className={`flex items-center space-x-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'presentation'
-                  ? 'bg-white text-indigo-700 shadow-xs font-semibold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <FileText className="w-4 h-4" />
-              <span>Presentation Deck</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('demo')}
-              className={`flex items-center space-x-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'demo'
-                  ? 'bg-white text-indigo-700 shadow-xs font-semibold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>Live Demo</span>
-            </button>
-          </div>
-        </div>
-      </header>
+      {/* Top Header & Modern Primary Navigation Bar */}
+      <Navbar activeTab={activeTab === 'demo' ? 'project' : activeTab} onNavigate={handleNavigate} />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* ========================================================================= */}
-        {/* TAB 1: PRESENTATION VIEW                                                 */}
+        {/* TAB 1: HOME VIEW (LANDING PAGE)                                           */}
+        {/* ========================================================================= */}
+        {activeTab === 'home' && (
+          <HomeView onNavigate={handleNavigate} onQuickAudit={handleQuickAudit} />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 2: PRESENTATION VIEW                                                 */}
         {/* ========================================================================= */}
         {activeTab === 'presentation' && (
           <div className="space-y-10 animate-fade-in">
@@ -533,9 +540,9 @@ export default function App() {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 2: LIVE DEMO VIEW                                                    */}
+        {/* TAB 3: MAIN PROJECT (LIVE DEMO) VIEW                                      */}
         {/* ========================================================================= */}
-        {activeTab === 'demo' && (
+        {(activeTab === 'project' || activeTab === 'demo') && (
           <div className="space-y-8 animate-fade-in">
             {/* Search / Run Audit Card */}
             <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-xs">
