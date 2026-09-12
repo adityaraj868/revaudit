@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RevAudit - Academic Lab Project Report - Dr. Sukhpal Singh</title>
+  <style>
+    @media print {
+      body { font-size: 11pt; }
+      .no-print { display: none; }
+      .page-break { page-break-before: always; }
+      @page { margin: 1.8cm; }
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.65;
+      color: #1e293b;
+      max-width: 850px;
+      margin: 40px auto;
+      padding: 0 24px;
+      background-color: #ffffff;
+    }
+    h1, h2, h3, h4 { color: #0f172a; font-weight: 700; }
+    h1 { font-size: 26pt; margin-bottom: 6px; line-height: 1.2; border-bottom: 2px solid #4f46e5; padding-bottom: 12px; }
+    h2 { font-size: 16pt; margin-top: 32px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; color: #312e81; }
+    h3 { font-size: 13pt; margin-top: 20px; color: #4338ca; }
+    .meta-card {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 20px 0 30px;
+      font-size: 10.5pt;
+    }
+    .meta-card table { width: 100%; border-collapse: collapse; }
+    .meta-card td { padding: 4px 8px; vertical-align: top; }
+    .meta-card td:first-child { font-weight: 600; width: 180px; color: #475569; }
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      font-size: 10pt;
+    }
+    table.data-table th, table.data-table td {
+      border: 1px solid #cbd5e1;
+      padding: 9px 12px;
+      text-align: left;
+    }
+    table.data-table th {
+      background-color: #f1f5f9;
+      color: #334155;
+      font-weight: 600;
+    }
+    table.data-table tr:nth-child(even) { background-color: #f8fafc; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 9pt;
+      font-weight: 600;
+    }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-rose { background: #ffe4e6; color: #9f1239; }
+    .math-box {
+      background: #faf5ff;
+      border-left: 4px solid #9333ea;
+      padding: 12px 18px;
+      margin: 16px 0;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 10.5pt;
+    }
+    .abstract-box {
+      background: #eef2ff;
+      border-left: 4px solid #4f46e5;
+      padding: 14px 20px;
+      margin: 20px 0;
+      border-radius: 0 8px 8px 0;
+    }
+    .print-btn {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #4f46e5;
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 10pt;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+    }
+    .print-btn:hover { background: #4338ca; }
+  </style>
+</head>
+<body>
+
+  <button class="print-btn no-print" onclick="window.print()">🖨️ Print / Save as PDF</button>
+
+  <h1>RevAudit: Empirical Pull Request Code Review Effort Anomaly Detection</h1>
+  <p style="color: #64748b; font-size: 12pt; margin-top: -6px;">Academic Lab Project Report &amp; Software Design Document</p>
+
+  <div class="meta-card">
+    <table>
+      <tr>
+        <td>Evaluated By:</td>
+        <td><strong>Dr. Sukhpal Singh</strong> (Software Engineering Laboratory)</td>
+      </tr>
+      <tr>
+        <td>Project Team:</td>
+        <td><strong>Team ArchCoders</strong></td>
+      </tr>
+      <tr>
+        <td>Team Members:</td>
+        <td>
+          • <strong>Sparsh Khandelwal</strong> (Backend Architecture &amp; Statistical Engine Lead)<br>
+          • <strong>Dheeraj</strong> (System Architecture &amp; UML Modeling Lead)<br>
+          • <strong>Frontend Teammate</strong> (React + Tailwind Deck &amp; UI Lead)<br>
+          • <strong>QA &amp; Validation Teammate</strong> (Verification, Testing &amp; Presentation Lead)
+        </td>
+      </tr>
+      <tr>
+        <td>Date of Evaluation:</td>
+        <td>September 2026</td>
+      </tr>
+      <tr>
+        <td>Repository Root:</td>
+        <td><code>/Users/sparshkhandelwal/Desktop/RevAudit</code></td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="abstract-box">
+    <h3 style="margin-top: 0; color: #3730a3;">Abstract &amp; Executive Summary</h3>
+    <p style="margin-bottom: 0;">
+      Turnaround time is the predominant metric used to measure code review velocity. However, flat arithmetic metrics like "time-to-merge" fail because they do not control for pull request complexity or reviewer workload. This creates perverse incentives that encourage superficial "LGTM" approvals on trivial PRs while penalizing thorough reviews on large changes. <strong>RevAudit</strong> introduces size-controlled median baselines using live data from GitHub's REST API v3. By segmenting PRs into complexity cohorts, computing non-parametric medians with 90% confidence intervals, and flagging PRs exceeding 1.5× group medians, RevAudit delivers statistically rigorous code review audits without relying on external databases.
+    </p>
+  </div>
+
+  <h2>1. Problem Formulation: Invisible Variation</h2>
+  <p>In modern collaborative software development, naive service-level metrics (e.g., "PRs must merge within 24 hours") create critical dysfunctions:</p>
+  <ul>
+    <li><strong>Uncontrolled Confounders:</strong> A 10-line bug fix taking 48 hours indicates severe queue stagnation; a 2,000-line database refactoring taking 48 hours represents rapid turnaround. Flat metrics equate these cases.</li>
+    <li><strong>Perverse Review Incentives:</strong> Engineers are incentivized to approve trivial PRs quickly to optimize metrics, while delaying complex, high-risk PRs.</li>
+    <li><strong>Right-Skewed Distributions:</strong> Turnaround times follow heavy-tailed distributions (log-normal or Pareto). Arithmetic means are heavily skewed by extreme outliers, necessitating median-based non-parametric baselines.</li>
+  </ul>
+
+  <h2>2. Mathematical &amp; Statistical Engine</h2>
+  <p>RevAudit executes a 5-stage statistical pipeline on live repository pull requests:</p>
+  
+  <h3>2.1 Survival Bias Cleaning (Missing Data Imputation)</h3>
+  <p>PRs closed without merging (abandoned branches or rejected PRs) distort review effort. They are automatically discarded: <code>df[df['merged_at'].notna()]</code>.</p>
+
+  <h3>2.2 Review Effort Latency</h3>
+  <div class="math-box">
+    Review Time (hours) = (Timestamp(merged_at) - Timestamp(created_at)) / 3600
+  </div>
+
+  <h3>2.3 Complexity Cohort Stratification</h3>
+  <p>PRs are stratified by description character length (<i>L</i>) as a complexity proxy:</p>
+  <ul>
+    <li><strong>Small Cohort:</strong> <i>L</i> &lt; 250 characters (minor fixes, typo corrections)</li>
+    <li><strong>Medium Cohort:</strong> 250 &le; <i>L</i> &lt; 1000 characters (standard features)</li>
+    <li><strong>Large Cohort:</strong> <i>L</i> &ge; 1000 characters (major architectural refactorings)</li>
+  </ul>
+
+  <h3>2.4 Non-Parametric Median &amp; 90% Confidence Interval</h3>
+  <p>For each cohort, the median review duration (&tilde;x) is calculated along with a 90% confidence interval:</p>
+  <div class="math-box">
+    CI_90 = [ max(0, &tilde;x - 1.645 &times; (s / &radic;n)), &tilde;x + 1.645 &times; (s / &radic;n) ]
+  </div>
+
+  <h3>2.5 Anomaly Flagging Heuristic (1.5&times; Rule)</h3>
+  <div class="math-box">
+    IsAnomaly = True &nbsp;if&nbsp; ReviewTime &gt; 1.5 &times; (Cohort Median)<br>
+    Variance Ratio = ReviewTime / (Cohort Median)
+  </div>
+
+  <div class="page-break"></div>
+
+  <h2>3. Live Empirical Case Study: <code>fastapi/fastapi</code></h2>
+  <p>Executing RevAudit on 30 recently closed pull requests from the live FastAPI repository produced the following empirical findings:</p>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Size Cohort</th>
+        <th>Sample Size</th>
+        <th>Median Review Time</th>
+        <th>90% Confidence Interval</th>
+        <th>1.5&times; Threshold</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Small PRs</strong> (&lt;250 chars)</td>
+        <td>3 PRs</td>
+        <td><strong>0.39 hours</strong> (23 mins)</td>
+        <td>[0.00h, 2.15h]</td>
+        <td>&gt; 0.58 hours</td>
+        <td><span class="badge badge-blue">Baseline Established</span></td>
+      </tr>
+      <tr>
+        <td><strong>Large PRs</strong> (&gt;1000 chars)</td>
+        <td>6 PRs</td>
+        <td><strong>8.04 hours</strong></td>
+        <td>[7.56h, 8.51h]</td>
+        <td>&gt; 12.06 hours</td>
+        <td><span class="badge badge-green">Baseline Established</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Flagged Anomaly Analysis</h3>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>PR #</th>
+        <th>Author</th>
+        <th>Size Cohort</th>
+        <th>Review Duration</th>
+        <th>Cohort Median</th>
+        <th>Variance Ratio</th>
+        <th>Diagnostic Outcome</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>#16282</td>
+        <td>@pr-submit[bot]</td>
+        <td>Small (34 chars)</td>
+        <td><strong>3.55 hours</strong></td>
+        <td>0.39 hours</td>
+        <td><strong>9.1&times; median</strong></td>
+        <td><span class="badge badge-rose">Flagged Anomaly</span></td>
+      </tr>
+    </tbody>
+  </table>
+  <p><strong>Diagnostic Significance:</strong> On paper, 3.55 hours appears fast. However, because RevAudit controls for PR size, it accurately identified that an automated 34-character sponsor update took <strong>9 times longer</strong> than typical small PRs in this repository.</p>
+
+  <h2>4. System Architecture &amp; UML Specifications</h2>
+  <ul>
+    <li><strong>01_sequence_oauth.puml:</strong> Contributor login via GitHub OAuth delegation and token exchange.</li>
+    <li><strong>02_sequence_audit_request.puml:</strong> Frontend query dispatch, state transitions, and anomaly rendering.</li>
+    <li><strong>03_sequence_github_fetch.puml:</strong> Ingestion from GitHub API with pagination and 404/403 rate-limit resilience.</li>
+    <li><strong>04_sequence_pandas_baseline.puml:</strong> Pandas cleaning, body length grouping, and median computation.</li>
+    <li><strong>05_sequence_pdf_export.puml:</strong> PDF report compilation pipeline for team leadership.</li>
+    <li><strong>06_class_diagram.puml:</strong> Domain architecture with <code>User</code>, <code>Repository</code>, <code>PullRequest</code>, <code>ReviewEvent</code>, and <code>StatisticalModel</code>.</li>
+  </ul>
+
+  <h2>5. Team Contributions Matrix</h2>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Team Member</th>
+        <th>Assigned Role</th>
+        <th>Technical Deliverables</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Sparsh Khandelwal</strong></td>
+        <td>Backend &amp; Statistical Engine Lead</td>
+        <td>FastAPI server (<code>main.py</code>), Pandas data pipeline, GitHub REST API client, median &amp; 90% CI calculations, CORS configuration.</td>
+      </tr>
+      <tr>
+        <td><strong>Dheeraj</strong></td>
+        <td>Architecture &amp; UML Lead</td>
+        <td>5 PlantUML sequence diagrams, domain class diagram, system interaction specifications.</td>
+      </tr>
+      <tr>
+        <td><strong>Frontend Teammate</strong></td>
+        <td>UI/UX &amp; Dashboard Lead</td>
+        <td>React + Tailwind SPA (<code>App.jsx</code>), dual-tab switcher (Presentation Deck vs. Live Demo), responsive anomaly matrix.</td>
+      </tr>
+      <tr>
+        <td><strong>QA Teammate</strong></td>
+        <td>Verification &amp; Presentation Lead</td>
+        <td>Live endpoint validation, edge-case testing (unmerged PRs, 404s, rate limits), lab demo delivery.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>6. Conclusion</h2>
+  <p>
+    RevAudit proves that software engineering metrics cannot rely on crude averages. By segmenting PRs into size-controlled cohorts and evaluating review duration against non-parametric medians with confidence intervals, the system reveals true review bottlenecks while filtering out superficial noise.
+  </p>
+
+</body>
+</html>

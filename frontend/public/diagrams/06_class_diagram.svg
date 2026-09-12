@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420" width="100%" height="100%">
+  <defs>
+    <style>
+      .title { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px; font-weight: 700; fill: #1e293b; }
+      .class-title { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; font-weight: 700; fill: #0f172a; text-anchor: middle; }
+      .text-attr { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; fill: #334155; }
+      .text-rel { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 10px; font-weight: 600; fill: #64748b; }
+      .cls-box { fill: #ffffff; stroke: #6366f1; stroke-width: 1.5; rx: 6; }
+      .cls-header { fill: #e0e7ff; stroke: #6366f1; stroke-width: 1.5; }
+      .cls-line { stroke: #e2e8f0; stroke-width: 1; }
+      .rel-line { stroke: #475569; stroke-width: 1.5; }
+      .rel-dash { stroke: #8b5cf6; stroke-width: 1.5; stroke-dasharray: 4 3; }
+    </style>
+  </defs>
+
+  <rect width="100%" height="100%" fill="#ffffff" rx="12"/>
+  <rect x="1" y="1" width="758" height="418" fill="none" stroke="#e2e8f0" stroke-width="1.5" rx="12"/>
+  <text x="24" y="30" class="title">Class Diagram: RevAudit Domain Architecture</text>
+
+  <!-- Class 1: User -->
+  <g transform="translate(30, 60)">
+    <rect width="170" height="130" class="cls-box"/>
+    <path d="M 0 6 Q 0 0 6 0 L 164 0 Q 170 0 170 6 L 170 28 L 0 28 Z" class="cls-header"/>
+    <text x="85" y="20" class="class-title">User</text>
+    <line x1="0" y1="28" x2="170" y2="28" class="cls-line"/>
+    <text x="10" y="44" class="text-attr">+ id: int</text>
+    <text x="10" y="58" class="text-attr">+ username: string</text>
+    <text x="10" y="72" class="text-attr">+ role: string</text>
+    <line x1="0" y1="80" x2="170" y2="80" class="cls-line"/>
+    <text x="10" y="96" class="text-attr">+ get_prs(): List</text>
+    <text x="10" y="112" class="text-attr">+ get_reviews(): List</text>
+  </g>
+
+  <!-- Class 2: Repository -->
+  <g transform="translate(290, 60)">
+    <rect width="180" height="130" class="cls-box"/>
+    <path d="M 0 6 Q 0 0 6 0 L 174 0 Q 180 0 180 6 L 180 28 L 0 28 Z" class="cls-header"/>
+    <text x="90" y="20" class="class-title">Repository</text>
+    <line x1="0" y1="28" x2="180" y2="28" class="cls-line"/>
+    <text x="10" y="44" class="text-attr">+ owner: string</text>
+    <text x="10" y="58" class="text-attr">+ name: string</text>
+    <text x="10" y="72" class="text-attr">+ is_private: bool</text>
+    <line x1="0" y1="80" x2="180" y2="80" class="cls-line"/>
+    <text x="10" y="96" class="text-attr">+ fetch_closed_prs()</text>
+    <text x="10" y="112" class="text-attr">+ compute_health(): float</text>
+  </g>
+
+  <!-- Class 3: PullRequest -->
+  <g transform="translate(290, 240)">
+    <rect width="180" height="155" class="cls-box"/>
+    <path d="M 0 6 Q 0 0 6 0 L 174 0 Q 180 0 180 6 L 180 28 L 0 28 Z" class="cls-header"/>
+    <text x="90" y="20" class="class-title">PullRequest</text>
+    <line x1="0" y1="28" x2="180" y2="28" class="cls-line"/>
+    <text x="10" y="44" class="text-attr">+ number: int</text>
+    <text x="10" y="58" class="text-attr">+ body_length: int</text>
+    <text x="10" y="72" class="text-attr">+ review_time_hours: float</text>
+    <text x="10" y="86" class="text-attr">+ size_category: string</text>
+    <text x="10" y="100" class="text-attr">+ is_anomaly: bool</text>
+    <line x1="0" y1="108" x2="180" y2="108" class="cls-line"/>
+    <text x="10" y="124" class="text-attr">+ categorize_size(): str</text>
+    <text x="10" y="140" class="text-attr">+ compute_latency(): float</text>
+  </g>
+
+  <!-- Class 4: ReviewEvent -->
+  <g transform="translate(30, 240)">
+    <rect width="170" height="130" class="cls-box"/>
+    <path d="M 0 6 Q 0 0 6 0 L 164 0 Q 170 0 170 6 L 170 28 L 0 28 Z" class="cls-header"/>
+    <text x="85" y="20" class="class-title">ReviewEvent</text>
+    <line x1="0" y1="28" x2="170" y2="28" class="cls-line"/>
+    <text x="10" y="44" class="text-attr">+ id: int</text>
+    <text x="10" y="58" class="text-attr">+ reviewer_id: int</text>
+    <text x="10" y="72" class="text-attr">+ state: string</text>
+    <line x1="0" y1="80" x2="170" y2="80" class="cls-line"/>
+    <text x="10" y="96" class="text-attr">+ is_approving(): bool</text>
+    <text x="10" y="112" class="text-attr">+ latency_hours(): float</text>
+  </g>
+
+  <!-- Class 5: StatisticalModel -->
+  <g transform="translate(540, 140)">
+    <rect width="190" height="160" class="cls-box"/>
+    <path d="M 0 6 Q 0 0 6 0 L 184 0 Q 190 0 190 6 L 190 28 L 0 28 Z" class="cls-header"/>
+    <text x="95" y="20" class="class-title">StatisticalModel</text>
+    <line x1="0" y1="28" x2="190" y2="28" class="cls-line"/>
+    <text x="10" y="44" class="text-attr">+ anomaly_multiplier: 1.5</text>
+    <text x="10" y="58" class="text-attr">+ confidence_level: 0.90</text>
+    <text x="10" y="72" class="text-attr">+ baseline_medians: Dict</text>
+    <line x1="0" y1="82" x2="190" y2="82" class="cls-line"/>
+    <text x="10" y="98" class="text-attr">+ compute_baselines()</text>
+    <text x="10" y="114" class="text-attr">+ calculate_ci_90()</text>
+    <text x="10" y="130" class="text-attr">+ flag_anomalies()</text>
+  </g>
+
+  <!-- Relationships Lines -->
+  <!-- User to Repo -->
+  <line x1="200" y1="120" x2="290" y2="120" class="rel-line"/>
+  <text x="210" y="112" class="text-rel">1</text>
+  <text x="270" y="112" class="text-rel">0..*</text>
+
+  <!-- Repo to PR -->
+  <line x1="380" y1="190" x2="380" y2="240" class="rel-line"/>
+  <text x="385" y="205" class="text-rel">1</text>
+  <text x="385" y="230" class="text-rel">contains 0..*</text>
+
+  <!-- PR to ReviewEvent -->
+  <line x1="290" y1="310" x2="200" y2="310" class="rel-line"/>
+  <text x="270" y="302" class="text-rel">1</text>
+  <text x="210" y="302" class="text-rel">0..*</text>
+
+  <!-- Model to PR -->
+  <line x1="540" y1="280" x2="470" y2="280" class="rel-dash"/>
+  <text x="475" y="272" class="text-rel">evaluates &gt;</text>
+</svg>

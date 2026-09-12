@@ -1,0 +1,48 @@
+@startuml sequence_pandas_baseline
+!theme plain
+autonumber
+skinparam BoxPadding 10
+skinparam ParticipantPadding 15
+
+title Sequence Diagram: Pandas Engine Size-Controlled Baselines & Anomaly Detection
+
+participant "API Controller\n(FastAPI)" as API
+participant "Pandas Pipeline\n(Data Engine)" as Pandas
+participant "Statistical Model\n(Anomaly Detector)" as Model
+
+API -> Pandas : process_and_audit(raw_prs_json)
+activate Pandas
+
+Pandas -> Pandas : Convert JSON list to pd.DataFrame(prs)
+note right of Pandas : Ingest up to 30 closed pull requests
+
+Pandas -> Pandas : Filter unmerged PRs: df[df['merged_at'].notna()]
+note right of Pandas : Drop PRs closed without merge (missing data imputation)
+
+Pandas -> Pandas : Calculate review duration in hours:\n(merged_at - created_at).total_seconds() / 3600.0
+
+Pandas -> Pandas : Extract body character length: df['body'].fillna('').str.len()
+Pandas -> Pandas : Categorize PR Size proxy:\nSmall (<250), Medium (250-1000), Large (>1000)
+
+Pandas -> Model : compute_baselines_and_anomalies(merged_df)
+activate Model
+
+Model -> Model : GroupBy('size_category')['review_time_hours'].agg(['median', 'std', 'count'])
+Model -> Model : Calculate Mock 90% Confidence Interval:\nmedian ± 1.645 * (std / sqrt(n))
+
+loop For each PR in merged_df
+    Model -> Model : Get group median for PR's size category
+    alt review_time_hours > 1.5 * group_median
+        Model -> Model : Flag PR as Anomaly\nRecord PR#, author, review_time, group_median, mock_ci_90
+    else review_time_hours <= 1.5 * group_median
+        Model -> Model : Mark PR as within normal variation baseline
+    end
+end
+
+Model --> Pandas : Return baseline_medians and flagged_anomalies list
+deactivate Model
+
+Pandas --> API : Return cleaned audit results dictionary
+deactivate Pandas
+
+@enduml

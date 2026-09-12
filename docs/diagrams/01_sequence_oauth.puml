@@ -1,0 +1,45 @@
+@startuml sequence_oauth
+!theme plain
+autonumber
+skinparam BoxPadding 10
+skinparam ParticipantPadding 15
+
+title Sequence Diagram: Contributor Login via GitHub OAuth
+
+actor "Contributor\n(Reviewer/Lead)" as User
+participant "React Frontend\n(RevAudit UI)" as Frontend
+participant "FastAPI Backend\n(Auth Gateway)" as Backend
+participant "GitHub OAuth\nProvider" as GitHub
+
+User -> Frontend : Click "Sign in with GitHub"
+activate Frontend
+
+Frontend -> GitHub : Redirect to /login/oauth/authorize\n(client_id, scope=repo,read:user)
+activate GitHub
+GitHub --> User : Prompt for GitHub Credentials & Scopes
+User -> GitHub : Authorize Application Permissions
+GitHub --> Frontend : Redirect to Callback URL with ?code=AUTH_CODE
+deactivate GitHub
+
+Frontend -> Backend : POST /api/auth/github/callback\n{code: AUTH_CODE}
+activate Backend
+
+Backend -> GitHub : POST https://github.com/login/oauth/access_token\n{client_id, client_secret, code}
+activate GitHub
+GitHub --> Backend : 200 OK (access_token, token_type, scope)
+deactivate GitHub
+
+Backend -> GitHub : GET https://api.github.com/user\n(Authorization: Bearer access_token)
+activate GitHub
+GitHub --> Backend : 200 OK (id, login, avatar_url, email)
+deactivate GitHub
+
+Backend -> Backend : Create Authenticated Session / JWT\n(Store token in memory)
+Backend --> Frontend : 200 OK {user: login, avatar: url, session_token: jwt}
+deactivate Backend
+
+Frontend -> Frontend : Persist session state (Local Storage / State)
+Frontend --> User : Display Authenticated Profile & Repositories
+deactivate Frontend
+
+@enduml

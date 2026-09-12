@@ -1,0 +1,40 @@
+@startuml sequence_audit_request
+!theme plain
+autonumber
+skinparam BoxPadding 10
+skinparam ParticipantPadding 15
+
+title Sequence Diagram: Frontend Requesting Repo Audit
+
+actor "User" as User
+participant "React Frontend\n(Live Demo View)" as Frontend
+participant "FastAPI Engine\n(/api/audit)" as Backend
+participant "Pandas Engine\n(Statistical Model)" as Engine
+
+User -> Frontend : Enter Repo URL / Identifier (e.g., 'fastapi/fastapi')
+User -> Frontend : Click "Run Audit" button
+activate Frontend
+
+Frontend -> Frontend : Set UI state: isLoading = true\nDisplay loading spinner & disable button
+
+Frontend -> Backend : GET /api/audit?owner={owner}&repo={repo}
+activate Backend
+
+Backend -> Backend : Validate query parameters (owner, repo)
+Backend -> Engine : Trigger audit analysis pipeline
+activate Engine
+
+Engine --> Backend : Return computed payload\n(medians, 90% CI, flagged anomalies)
+deactivate Engine
+
+Backend --> Frontend : 200 OK JSON Response\n{total_closed_prs, baseline_medians, anomalies: [...]}
+deactivate Backend
+
+Frontend -> Frontend : Set UI state: isLoading = false\nStore audit results in component state
+Frontend -> Frontend : Render Baseline Metrics Cards\n(Small, Medium, Large medians)
+Frontend -> Frontend : Render Flagged Anomalies Table\n(PR #, Author, Review Time, CI bounds)
+
+Frontend --> User : Present Interactive Audit Results & Anomaly Badges
+deactivate Frontend
+
+@enduml

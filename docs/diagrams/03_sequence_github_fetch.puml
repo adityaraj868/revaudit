@@ -1,0 +1,38 @@
+@startuml sequence_github_fetch
+!theme plain
+autonumber
+skinparam BoxPadding 10
+skinparam ParticipantPadding 15
+
+title Sequence Diagram: Backend Fetching & Paginating Data from GitHub API
+
+participant "FastAPI Service\n(RevAudit Backend)" as Backend
+participant "Requests Client\n(HTTP Session)" as Client
+participant "GitHub REST API v3\n(/repos/{owner}/{repo}/pulls)" as GitHub
+
+Backend -> Client : get_pull_requests(owner, repo, state='closed', limit=30)
+activate Client
+
+loop Pagination Loop (until limit reached or no 'next' link)
+    Client -> GitHub : GET /repos/{owner}/{repo}/pulls?state=closed&per_page=30&page={n}\nHeaders: Accept: application/vnd.github.v3+json, User-Agent
+    activate GitHub
+
+    alt HTTP 200 OK (Success)
+        GitHub --> Client : 200 OK [PR_1, PR_2, ..., PR_k]\nHeader: Link: <...page=n+1>; rel="next", X-RateLimit-Remaining: 58
+        Client -> Client : Append page items to aggregated_prs list
+    else HTTP 404 Not Found (Invalid Repo)
+        GitHub --> Client : 404 Not Found {"message": "Not Found"}
+        Client --> Backend : Raise HTTPException(404, "Repository not found")
+    else HTTP 403 Forbidden (Rate Limit Exceeded)
+        GitHub --> Client : 403 Forbidden {"message": "API rate limit exceeded"}
+        Client --> Backend : Raise HTTPException(403, "GitHub API rate limit exceeded")
+    end
+    deactivate GitHub
+end
+
+Client --> Backend : Return aggregated PR JSON payload (30 PRs)
+deactivate Client
+
+Backend -> Backend : Hand off raw PR list to Pandas Data Cleaning Engine
+
+@enduml
