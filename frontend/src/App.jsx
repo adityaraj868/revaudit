@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
-import HomeView from './components/HomeView';
 import { 
   BarChart3, 
   GitPullRequest, 
@@ -131,16 +130,13 @@ StatisticalModel ..> PullRequest : analyzes
 };
 
 export default function App() {
-  // Read initial route from URL hash if available, defaulting to 'home'
+  // Default to 'project' (the main website), or 'presentation' if indicated by URL hash
   const getInitialTab = () => {
     if (typeof window !== 'undefined') {
       const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
-      if (hash === 'home' || hash === 'project' || hash === 'presentation') {
-        return hash;
-      }
-      if (hash === 'demo') return 'project';
+      if (hash === 'presentation') return 'presentation';
     }
-    return 'home';
+    return 'project';
   };
 
   const [activeTab, setActiveTab] = useState(getInitialTab);
@@ -154,7 +150,7 @@ export default function App() {
   const handleNavigate = (tab) => {
     setActiveTab(tab);
     if (typeof window !== 'undefined') {
-      window.location.hash = tab;
+      window.location.hash = tab === 'project' ? '' : tab;
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
@@ -163,21 +159,15 @@ export default function App() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
-      if (hash === 'home' || hash === 'project' || hash === 'presentation') {
-        setActiveTab(hash);
-      } else if (hash === 'demo') {
+      if (hash === 'presentation') {
+        setActiveTab('presentation');
+      } else {
         setActiveTab('project');
       }
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
-
-  const handleQuickAudit = (repo) => {
-    setRepoInput(repo);
-    handleNavigate('project');
-    handleRunAudit(repo);
-  };
 
   // Helper to parse owner/repo from URL or string
   const parseRepo = (input) => {
@@ -220,26 +210,27 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
       {/* Top Header & Modern Primary Navigation Bar */}
-      <Navbar activeTab={activeTab === 'demo' ? 'project' : activeTab} onNavigate={handleNavigate} />
+      <Navbar activeTab={activeTab} onNavigate={handleNavigate} />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* ========================================================================= */}
-        {/* TAB 1: HOME VIEW (LANDING PAGE)                                           */}
-        {/* ========================================================================= */}
-        {activeTab === 'home' && (
-          <HomeView onNavigate={handleNavigate} onQuickAudit={handleQuickAudit} />
-        )}
-
-        {/* ========================================================================= */}
-        {/* TAB 2: PRESENTATION VIEW                                                 */}
+        {/* PRESENTATION DECK VIEW                                                    */}
         {/* ========================================================================= */}
         {activeTab === 'presentation' && (
           <div className="space-y-10 animate-fade-in">
-            {/* Academic Lab Hero Banner */}
+            {/* Academic Lab Hero Banner with Return Link */}
             <div className="bg-gradient-to-br from-indigo-900 via-indigo-850 to-slate-900 text-white rounded-2xl p-8 shadow-xl border border-indigo-700/40">
-              <div className="inline-flex items-center space-x-2 bg-indigo-500/20 border border-indigo-400/30 px-3 py-1 rounded-full text-xs font-medium text-indigo-200 mb-4">
-                <span>Academic Prototype • Dr. Sukhpal Singh</span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                <div className="inline-flex items-center space-x-2 bg-indigo-500/20 border border-indigo-400/30 px-3 py-1 rounded-full text-xs font-medium text-indigo-200">
+                  <span>Academic Prototype • Dr. Sukhpal Singh • Team ArchCoders</span>
+                </div>
+                <button
+                  onClick={() => handleNavigate('project')}
+                  className="inline-flex items-center space-x-1.5 text-xs font-semibold bg-white/10 hover:bg-white/20 text-indigo-100 px-3.5 py-1.5 rounded-lg border border-white/20 transition-colors w-fit cursor-pointer"
+                >
+                  <span>← Back to Live Project</span>
+                </button>
               </div>
               <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3">
                 RevAudit: Software Engineering Analytics
@@ -540,10 +531,37 @@ export default function App() {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 3: MAIN PROJECT (LIVE DEMO) VIEW                                      */}
+        {/* MAIN PROJECT (LIVE AUDIT VIEW)                                            */}
         {/* ========================================================================= */}
-        {(activeTab === 'project' || activeTab === 'demo') && (
+        {activeTab !== 'presentation' && (
           <div className="space-y-8 animate-fade-in">
+            {/* Top Project Context Banner with Link to Presentation Deck */}
+            <div className="bg-gradient-to-r from-indigo-900 via-indigo-850 to-slate-900 text-white rounded-2xl p-6 sm:p-7 shadow-lg border border-indigo-700/40 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1.5 max-w-2xl">
+                <div className="inline-flex items-center space-x-2 bg-indigo-500/20 border border-indigo-400/30 px-3 py-1 rounded-full text-xs font-semibold text-indigo-200">
+                  <span>Academic Lab Prototype • Dr. Sukhpal Singh</span>
+                  <span className="text-indigo-400">•</span>
+                  <span>Team ArchCoders</span>
+                </div>
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
+                  RevAudit: GitHub PR Review Effort Analytics
+                </h1>
+                <p className="text-xs sm:text-sm text-indigo-100/90 leading-relaxed">
+                  Controls for pull request size and reviewer workload using live GitHub REST API data. Evaluates review turnaround against size-stratified medians and flags statistical anomalies.
+                </p>
+              </div>
+
+              <div className="shrink-0 flex items-center">
+                <button
+                  onClick={() => handleNavigate('presentation')}
+                  className="inline-flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white border border-white/25 shadow-xs transition-colors cursor-pointer group"
+                >
+                  <FileText className="w-4 h-4 text-indigo-300" />
+                  <span>View Presentation Deck</span>
+                  <ChevronRight className="w-4 h-4 text-indigo-200 group-hover:translate-x-0.5 transition-transform" />
+                </button>
+              </div>
+            </div>
             {/* Search / Run Audit Card */}
             <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-xs">
               <h2 className="text-xl font-bold text-slate-900 mb-2">Live Repository Audit</h2>
