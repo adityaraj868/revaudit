@@ -191,7 +191,7 @@ export default function App() {
     setAuditData(null);
 
     try {
-      const response = await fetch(`http://localhost:8000/api/audit?owner=${encodeURIComponent(parsed.owner)}&repo=${encodeURIComponent(parsed.repo)}`);
+      const response = await fetch(`https://revaudit-backend.onrender.com/api/audit?owner=${encodeURIComponent(parsed.owner)}&repo=${encodeURIComponent(parsed.repo)}`);
       
       if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}));
@@ -201,7 +201,7 @@ export default function App() {
       const data = await response.json();
       setAuditData(data);
     } catch (err) {
-      setError(err.message || 'Failed to connect to the RevAudit backend at http://localhost:8000.');
+      setError(err.message || 'Failed to connect to the RevAudit backend at https://revaudit-backend.onrender.com.');
     } finally {
       setLoading(false);
     }
@@ -630,7 +630,7 @@ export default function App() {
                   <h4 className="font-semibold">Audit Request Failed</h4>
                   <p className="mt-1 text-xs text-rose-700">{error}</p>
                   <p className="mt-2 text-xs text-rose-600">
-                    Tip: Ensure the FastAPI backend server is running on <code className="bg-rose-100 px-1 py-0.5 rounded">http://localhost:8000</code>.
+                    Tip: Ensure the FastAPI backend server is running on <code className="bg-rose-100 px-1 py-0.5 rounded">https://revaudit-backend.onrender.com</code>.
                   </p>
                 </div>
               </div>
