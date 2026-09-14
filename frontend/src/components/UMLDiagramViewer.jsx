@@ -109,26 +109,12 @@ export default function UMLDiagramViewer({ initialDiagramId = '02_sequence_audit
 
         <div className="p-4 sm:p-6 bg-slate-950/40">
           {viewMode === 'diagram' ? (
-            <div className="flex flex-col items-center justify-center p-4 bg-white/5 rounded-xl border border-slate-800/80 min-h-[360px]">
+            <div className="flex flex-col items-center justify-center p-4 bg-white/5 rounded-xl border border-slate-800/80 min-h-[360px] overflow-auto">
               <img
-                src={currentDiagram.fallbackSvg}
+                src={currentDiagram.svgPath}
                 alt={currentDiagram.title}
-                className="max-h-[460px] w-auto max-w-full rounded-lg shadow-md border border-slate-800 bg-white p-2"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  const fallbackEl = document.getElementById(`fallback-code-${currentDiagram.id}`);
-                  if (fallbackEl) fallbackEl.style.display = 'block';
-                }}
+                className="max-h-[460px] w-auto max-w-full rounded-lg shadow-md border border-slate-800 bg-white p-2 object-contain"
               />
-              <div 
-                id={`fallback-code-${currentDiagram.id}`} 
-                style={{ display: 'none' }}
-                className="w-full text-left"
-              >
-                <pre className="text-xs font-mono text-slate-300 bg-slate-950 p-4 rounded-xl border border-slate-800 overflow-x-auto">
-                  {currentDiagram.puml}
-                </pre>
-              </div>
             </div>
           ) : (
             <div className="relative">

@@ -365,9 +365,9 @@ export default function PresentationDeck({ onNavigateToAudit }) {
               {expandedDiagram && (
                 <div className="p-2 bg-white rounded-lg border border-slate-700 animate-fade-in">
                   <img
-                    src={slideDiagram.fallbackSvg}
+                    src={slideDiagram.svgPath}
                     alt={slideDiagram.title}
-                    className="max-h-64 mx-auto"
+                    className="max-h-64 mx-auto object-contain"
                   />
                 </div>
               )}
