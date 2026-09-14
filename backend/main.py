@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 import math
+import os
 import requests
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
@@ -63,6 +64,10 @@ def audit_repository(
         "Accept": "application/vnd.github.v3+json",
         "User-Agent": "RevAudit-Academic-Prototype",
     }
+
+    github_token = os.environ.get("GITHUB_TOKEN")
+    if github_token:
+        headers["Authorization"] = f"token {github_token}"
 
     try:
         response = requests.get(github_url, params=params, headers=headers, timeout=15)
