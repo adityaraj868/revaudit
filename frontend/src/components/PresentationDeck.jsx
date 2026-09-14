@@ -53,7 +53,7 @@ export default function PresentationDeck({ onNavigateToAudit }) {
       {/* Top Slide Deck Navigation Toolbar */}
       <div className="p-3 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-mono">
         <div className="flex items-center space-x-2">
-          <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-orange-500/10 text-orange-400 border border-orange-500/20 flex items-center justify-center">
             <Presentation className="w-4 h-4" />
           </div>
           <div>
@@ -61,7 +61,7 @@ export default function PresentationDeck({ onNavigateToAudit }) {
               <span className="text-xs font-semibold text-white">
                 Academic Evaluation Deck
               </span>
-              <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+              <span className="text-[10px] text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20">
                 Slide {slide.num} of 0{totalSlides}
               </span>
             </div>
@@ -116,7 +116,7 @@ export default function PresentationDeck({ onNavigateToAudit }) {
               onClick={() => setCurrentSlideIndex(idx)}
               className={`py-1.5 px-2 rounded-lg border text-center transition-all cursor-pointer truncate ${
                 isActive
-                  ? 'bg-indigo-600 text-white font-bold border-indigo-400 shadow-xs'
+                  ? 'bg-orange-500/20 text-orange-300 font-bold border-orange-500/40 shadow-xs'
                   : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border-slate-800 hover:bg-slate-800'
               }`}
             >
@@ -132,7 +132,7 @@ export default function PresentationDeck({ onNavigateToAudit }) {
         
         {/* Slide Header */}
         <div className="border-b border-slate-800/80 pb-4 space-y-1">
-          <div className="flex items-center space-x-2 text-xs font-mono text-indigo-400 uppercase font-semibold">
+          <div className="flex items-center space-x-2 text-xs font-mono text-orange-400 uppercase font-semibold">
             <span>Slide {slide.num}</span>
             <span>•</span>
             <span>{slide.category}</span>
@@ -154,20 +154,20 @@ export default function PresentationDeck({ onNavigateToAudit }) {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 font-mono text-xs">
                 {slide.keyPoints.map((kp, idx) => (
                   <div key={idx} className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
-                    <span className="text-indigo-400 font-bold text-xs uppercase block">{kp.title}</span>
+                    <span className="text-orange-400 font-bold text-xs uppercase block">{kp.title}</span>
                     <p className="text-slate-300 font-sans text-xs leading-relaxed">{kp.text}</p>
                   </div>
                 ))}
               </div>
 
-              <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono">
+              <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono">
                 <div className="space-y-0.5">
-                  <span className="text-indigo-300 font-bold block">Team ArchCoders Presentation</span>
+                  <span className="text-orange-300 font-bold block">Team ArchCoders Presentation</span>
                   <span className="text-slate-400">Sparsh Khandelwal • Dheeraj • Frontend Teammate • QA Teammate</span>
                 </div>
                 <button
                   onClick={onNavigateToAudit}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg text-xs transition-colors shrink-0 flex items-center space-x-1 cursor-pointer"
+                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-slate-950 font-bold rounded-lg text-xs transition-colors shrink-0 flex items-center space-x-1 cursor-pointer"
                 >
                   <Play className="w-3.5 h-3.5" />
                   <span>Launch Live Demo</span>
@@ -182,14 +182,14 @@ export default function PresentationDeck({ onNavigateToAudit }) {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 font-mono text-xs">
                 {slide.keyPoints.map((kp, idx) => (
                   <div key={idx} className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
-                    <span className="text-amber-400 font-bold text-xs uppercase block">{kp.title}</span>
+                    <span className="text-rose-400 font-bold text-xs uppercase block">{kp.title}</span>
                     <p className="text-slate-300 font-sans text-xs leading-relaxed">{kp.text}</p>
                   </div>
                 ))}
               </div>
 
               <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 font-mono text-xs text-slate-300">
-                <strong className="text-cyan-400 uppercase text-[10px] block mb-1">Academic Takeaway:</strong>
+                <strong className="text-amber-400 uppercase text-[10px] block mb-1">Empirical Takeaway:</strong>
                 <p className="font-sans">{slide.statisticalTakeaway}</p>
               </div>
             </div>
@@ -200,7 +200,7 @@ export default function PresentationDeck({ onNavigateToAudit }) {
             <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 font-mono text-xs">
               {slide.stages.map((stg, idx) => (
                 <div key={idx} className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1 flex flex-col justify-between">
-                  <span className="text-cyan-400 font-bold text-xs">{stg.step}</span>
+                  <span className="text-orange-400 font-bold text-xs">{stg.step}</span>
                   <p className="text-slate-300 font-sans text-[11px] leading-snug">{stg.desc}</p>
                 </div>
               ))}
@@ -213,7 +213,7 @@ export default function PresentationDeck({ onNavigateToAudit }) {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div className="p-3 rounded-lg bg-slate-950/80 border border-slate-800">
                   <span className="text-[10px] text-slate-500 uppercase">Target Repository</span>
-                  <strong className="text-cyan-400 block text-sm">{slide.caseStudy.repo}</strong>
+                  <strong className="text-orange-400 block text-sm">{slide.caseStudy.repo}</strong>
                 </div>
                 <div className="p-3 rounded-lg bg-slate-950/80 border border-slate-800">
                   <span className="text-[10px] text-slate-500 uppercase">Ingested Closed PRs</span>
@@ -237,7 +237,7 @@ export default function PresentationDeck({ onNavigateToAudit }) {
                     <div key={idx} className="p-2.5 rounded bg-slate-900 border border-slate-800 space-y-1 text-xs">
                       <div className="flex justify-between font-bold text-slate-200">
                         <span>{c.name}</span>
-                        <span className="text-cyan-400">n = {c.n}</span>
+                        <span className="text-slate-400">n = {c.n}</span>
                       </div>
                       <div className="flex justify-between text-slate-400 text-[11px]">
                         <span>Median Latency (x̃):</span>
@@ -257,19 +257,21 @@ export default function PresentationDeck({ onNavigateToAudit }) {
               </div>
 
               {/* Anomaly Highlight */}
-              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-amber-400 font-bold">
-                    Anomaly Highlight: {slide.caseStudy.anomalyHighlight.pr} ({slide.caseStudy.anomalyHighlight.title})
-                  </span>
-                  <span className="text-rose-400 font-black">
-                    {slide.caseStudy.anomalyHighlight.ratio}
-                  </span>
+              {slide.caseStudy.anomalyHighlight && (
+                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-amber-400 font-bold">
+                      Anomaly Highlight: {slide.caseStudy.anomalyHighlight.pr} ({slide.caseStudy.anomalyHighlight.title})
+                    </span>
+                    <span className="text-rose-400 font-black">
+                      {slide.caseStudy.anomalyHighlight.ratio}
+                    </span>
+                  </div>
+                  <p className="text-slate-300 font-sans text-xs leading-relaxed">
+                    {slide.caseStudy.anomalyHighlight.finding}
+                  </p>
                 </div>
-                <p className="text-slate-300 font-sans text-xs leading-relaxed">
-                  {slide.caseStudy.anomalyHighlight.finding}
-                </p>
-              </div>
+              )}
             </div>
           )}
 
@@ -278,7 +280,7 @@ export default function PresentationDeck({ onNavigateToAudit }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-xs">
               {slide.architecturePoints.map((arch, idx) => (
                 <div key={idx} className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
-                  <span className="text-cyan-400 font-bold text-xs uppercase block">{arch.layer}</span>
+                  <span className="text-orange-400 font-bold text-xs uppercase block">{arch.layer}</span>
                   <p className="text-slate-300 font-sans text-xs leading-relaxed">{arch.details}</p>
                 </div>
               ))}
@@ -295,7 +297,7 @@ export default function PresentationDeck({ onNavigateToAudit }) {
                       <strong className="text-white text-xs block">{mem.name}</strong>
                       <span className="text-[11px] text-slate-400">{mem.role}</span>
                     </div>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-300 border border-orange-500/30">
                       {mem.badge}
                     </span>
                   </div>
@@ -314,7 +316,7 @@ export default function PresentationDeck({ onNavigateToAudit }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-xs">
               {slide.roadmapItems.map((rd, idx) => (
                 <div key={idx} className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
-                  <span className="text-indigo-400 font-bold text-xs uppercase block">{rd.title}</span>
+                  <span className="text-orange-400 font-bold text-xs uppercase block">{rd.title}</span>
                   <p className="text-slate-300 font-sans text-xs leading-relaxed">{rd.desc}</p>
                 </div>
               ))}
@@ -333,13 +335,13 @@ export default function PresentationDeck({ onNavigateToAudit }) {
                 ))}
               </div>
 
-              <div className="p-4 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-between">
+              <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-between">
                 <span className="text-slate-200 font-sans text-xs">
                   Ready to test live repositories? Switch to the operational audit console.
                 </span>
                 <button
                   onClick={onNavigateToAudit}
-                  className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold rounded-lg text-xs transition-colors shrink-0 font-mono"
+                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-slate-950 font-bold rounded-lg text-xs transition-colors shrink-0 font-mono cursor-pointer"
                 >
                   Live Audit Console →
                 </button>
@@ -351,7 +353,7 @@ export default function PresentationDeck({ onNavigateToAudit }) {
           {slideDiagram && (
             <div className="mt-4 p-3 rounded-xl bg-slate-950/90 border border-slate-800">
               <div className="flex items-center justify-between mb-2 font-mono text-xs">
-                <span className="text-cyan-400 font-bold flex items-center space-x-1.5">
+                <span className="text-orange-400 font-bold flex items-center space-x-1.5">
                   <Code className="w-3.5 h-3.5" />
                   <span>Referenced Architectural Diagram: {slideDiagram.title}</span>
                 </span>

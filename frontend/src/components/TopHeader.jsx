@@ -100,7 +100,7 @@ export default function TopHeader({
             <button
               type="submit"
               disabled={loading}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-medium text-xs rounded-md transition-colors shadow-xs cursor-pointer disabled:cursor-not-allowed flex items-center space-x-1"
+              className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-semibold text-xs rounded-md transition-colors shadow-xs cursor-pointer disabled:cursor-not-allowed flex items-center space-x-1"
             >
               {loading ? (
                 <>
@@ -148,7 +148,7 @@ export default function TopHeader({
                   >
                     <span className="truncate">{repo.slug}</span>
                     {currentRepo === repo.slug && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
                     )}
                   </button>
                 ))}
@@ -178,21 +178,32 @@ export default function TopHeader({
       </div>
 
       {/* Mobile Input Row */}
-      <div className="sm:hidden px-4 pb-2.5 pt-1 border-t border-slate-800 flex items-center space-x-2">
-        <input
-          type="text"
-          value={repoInput}
-          onChange={(e) => setRepoInput(e.target.value)}
-          placeholder="e.g. fastapi/fastapi"
-          className="flex-1 bg-slate-950 border border-slate-800 text-slate-200 px-3 py-1.5 rounded-md text-xs font-mono focus:outline-none focus:border-slate-600"
-        />
-        <button
-          onClick={() => onRunAudit()}
-          disabled={loading}
-          className="px-3 py-1.5 bg-blue-600 text-white font-medium text-xs rounded-md"
+      <div className="p-3 border-t border-slate-800 sm:hidden bg-slate-950/60">
+        <form 
+          onSubmit={(e) => {
+            e.preventDefault();
+            onRunAudit();
+          }}
+          className="flex items-center space-x-2"
         >
-          {loading ? '...' : 'Audit'}
-        </button>
+          <div className="relative flex-1">
+            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
+            <input
+              type="text"
+              value={repoInput}
+              onChange={(e) => setRepoInput(e.target.value)}
+              placeholder="owner/repo"
+              className="w-full bg-slate-950 border border-slate-800 focus:border-slate-600 text-slate-200 pl-8 pr-3 py-1.5 rounded-md text-xs font-mono focus:outline-none"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 disabled:bg-slate-800 text-slate-950 font-semibold text-xs rounded-md"
+          >
+            Audit
+          </button>
+        </form>
       </div>
     </header>
   );

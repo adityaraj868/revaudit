@@ -151,7 +151,7 @@ export default function MethodologyView() {
       <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900 space-y-5">
         <div>
           <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider flex items-center space-x-2">
-            <Cpu className="w-4 h-4 text-blue-400" />
+            <Cpu className="w-4 h-4 text-orange-400" />
             <span>Five-Stage Statistical Analysis Pipeline</span>
           </h3>
           <p className="text-xs text-slate-400 mt-1">
@@ -170,17 +170,17 @@ export default function MethodologyView() {
                 onClick={() => setActiveStep(step.step)}
                 className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-2 ${
                   isActive
-                    ? 'bg-blue-600/15 border-blue-500/50 text-white'
+                    ? 'bg-orange-500/10 border-orange-500/40 text-white'
                     : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-                    isActive ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'
+                    isActive ? 'bg-orange-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-400'
                   }`}>
                     0{step.step}
                   </span>
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-blue-400' : 'text-slate-500'}`} />
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-orange-400' : 'text-slate-500'}`} />
                 </div>
                 <span className="font-sans font-medium text-xs truncate">{step.name}</span>
               </button>
@@ -202,7 +202,7 @@ export default function MethodologyView() {
                     {current.subtitle}
                   </span>
                 </div>
-                <span className="text-xs font-mono font-medium text-blue-400 px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20">
+                <span className="text-xs font-mono font-medium text-orange-400 px-2 py-0.5 rounded bg-orange-500/10 border border-orange-500/20">
                   Stage {current.step} of 5
                 </span>
               </div>

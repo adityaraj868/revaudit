@@ -4,7 +4,7 @@ import { RefreshCw, AlertTriangle, Search } from 'lucide-react';
 export function LoadingState({ repo = '' }) {
   return (
     <div className="p-12 rounded-2xl border border-slate-800 bg-slate-900/90 text-center space-y-4 shadow-sm animate-fade-in">
-      <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+      <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-400">
         <RefreshCw className="w-6 h-6 animate-spin" />
       </div>
 
@@ -17,8 +17,8 @@ export function LoadingState({ repo = '' }) {
         </p>
       </div>
 
-      <div className="inline-flex items-center space-x-2 text-[11px] font-mono text-cyan-400/80 bg-cyan-950/40 px-3 py-1 rounded-full border border-cyan-800/40">
-        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
+      <div className="inline-flex items-center space-x-2 text-[11px] font-mono text-orange-400/90 bg-orange-950/30 px-3 py-1 rounded-full border border-orange-800/30">
+        <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-ping"></span>
         <span>Survival Imputation • Stratification • 1.5x Anomaly Filter</span>
       </div>
     </div>
@@ -38,7 +38,7 @@ export function ErrorState({ error, onRetry }) {
             {error || 'Unable to retrieve repository data from GitHub REST API or RevAudit backend.'}
           </p>
           <p className="text-slate-400 text-[11px] pt-1">
-            Tip: Verify that the repository name follows the <code className="text-slate-300 bg-slate-950 px-1 py-0.5 rounded">owner/repo</code> syntax (e.g. <code className="text-cyan-300 bg-slate-950 px-1 py-0.5 rounded">fastapi/fastapi</code>) and check if GitHub API rate limits apply.
+            Tip: Verify that the repository name follows the <code className="text-slate-300 bg-slate-950 px-1 py-0.5 rounded">owner/repo</code> syntax (e.g. <code className="text-orange-300 bg-slate-950 px-1 py-0.5 rounded">fastapi/fastapi</code>) and check if GitHub API rate limits apply.
           </p>
         </div>
       </div>
@@ -80,7 +80,7 @@ export function EmptyAuditState({ onSampleClick }) {
             <button
               key={slug}
               onClick={() => onSampleClick(slug)}
-              className="px-2.5 py-1 rounded bg-slate-950 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-300 border border-slate-800 hover:border-cyan-500/40 text-[11px] transition-colors cursor-pointer"
+              className="px-2.5 py-1 rounded bg-slate-950 hover:bg-orange-500/10 text-slate-300 hover:text-orange-300 border border-slate-800 hover:border-orange-500/30 text-[11px] transition-colors cursor-pointer"
             >
               {slug}
             </button>

@@ -41,7 +41,7 @@ export default function ReviewAnalysisView({
         {onRefresh && (
           <button
             onClick={onRefresh}
-            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium text-xs transition-colors cursor-pointer"
+            className="px-3.5 py-1.5 bg-orange-500 hover:bg-orange-600 text-slate-950 rounded-lg font-semibold text-xs transition-colors cursor-pointer"
           >
             Run Audit Analysis
           </button>
@@ -169,12 +169,12 @@ export default function ReviewAnalysisView({
                     onClick={() => setSelectedCohort(isSelected ? 'ALL' : c.key)}
                     className={`cursor-pointer transition-colors ${
                       isSelected 
-                        ? 'bg-blue-600/10 hover:bg-blue-600/15' 
+                        ? 'bg-orange-500/10 hover:bg-orange-500/15' 
                         : 'hover:bg-slate-800/30'
                     }`}
                   >
                     <td className="py-2.5 px-3.5 font-medium text-slate-200 flex items-center space-x-2">
-                      <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-blue-400' : 'bg-slate-600'}`}></span>
+                      <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-orange-400' : 'bg-slate-600'}`}></span>
                       <span>{c.name}</span>
                     </td>
                     <td className="py-2.5 px-3.5 text-slate-400 font-mono text-[11px]">
@@ -238,7 +238,7 @@ export default function ReviewAnalysisView({
               onClick={() => setSelectedCohort('ALL')}
               className={`px-2.5 py-1 rounded text-[11px] transition-colors cursor-pointer border ${
                 selectedCohort === 'ALL'
-                  ? 'bg-blue-600 text-white border-blue-500 font-medium'
+                  ? 'bg-orange-500/20 text-orange-300 border-orange-500/40 font-semibold'
                   : 'bg-slate-950 text-slate-400 hover:text-slate-200 border-slate-800'
               }`}
             >
@@ -253,7 +253,7 @@ export default function ReviewAnalysisView({
                   onClick={() => setSelectedCohort(c.key)}
                   className={`px-2.5 py-1 rounded text-[11px] transition-colors cursor-pointer border ${
                     isActive
-                      ? 'bg-blue-600 text-white border-blue-500 font-medium'
+                      ? 'bg-orange-500/20 text-orange-300 border-orange-500/40 font-semibold'
                       : 'bg-slate-950 text-slate-400 hover:text-slate-200 border-slate-800'
                   }`}
                 >
