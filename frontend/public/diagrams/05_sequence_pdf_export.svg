@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 380" width="100%" height="100%">
+  <defs>
+    <style>
+      .title { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px; font-weight: 700; fill: #1e293b; }
+      .box-hdr { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; font-weight: 600; fill: #0f172a; text-anchor: middle; }
+      .text-msg { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; fill: #334155; }
+      .text-sub { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 10px; fill: #64748b; }
+      .lifeline { stroke: #cbd5e1; stroke-width: 1.5; stroke-dasharray: 4 4; }
+      .arrow { stroke: #0284c7; stroke-width: 1.75; marker-end: url(#arrowhead-blue); }
+      .return-arrow { stroke: #059669; stroke-width: 1.75; stroke-dasharray: 4 3; marker-end: url(#arrowhead-emerald); }
+      .note-box { fill: #f0fdf4; stroke: #bbf7d0; stroke-width: 1; rx: 6; }
+    </style>
+    <marker id="arrowhead-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#0284c7"/>
+    </marker>
+    <marker id="arrowhead-emerald" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#059669"/>
+    </marker>
+  </defs>
+
+  <rect width="100%" height="100%" fill="#ffffff" rx="12"/>
+  <rect x="1" y="1" width="758" height="378" fill="none" stroke="#e2e8f0" stroke-width="1.5" rx="12"/>
+  <text x="24" y="32" class="title">Sequence: User Exporting Flagged Analytics to PDF Report</text>
+
+  <!-- Participants -->
+  <rect x="35" y="55" width="125" height="36" rx="6" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="97" y="78" class="box-hdr">Review Lead</text>
+  <line x1="97" y1="91" x2="97" y2="340" class="lifeline"/>
+
+  <rect x="225" y="55" width="135" height="36" rx="6" fill="#e0f2fe" stroke="#38bdf8" stroke-width="1.5"/>
+  <text x="292" y="78" class="box-hdr">React Frontend</text>
+  <line x1="292" y1="91" x2="292" y2="340" class="lifeline"/>
+
+  <rect x="425" y="55" width="135" height="36" rx="6" fill="#e0e7ff" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="492" y="78" class="box-hdr">FastAPI Backend</text>
+  <line x1="492" y1="91" x2="492" y2="340" class="lifeline"/>
+
+  <rect x="615" y="55" width="125" height="36" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="677" y="78" class="box-hdr">PDF Engine</text>
+  <line x1="677" y1="91" x2="677" y2="340" class="lifeline"/>
+
+  <!-- Messages -->
+  <line x1="97" y1="120" x2="284" y2="120" class="arrow"/>
+  <text x="110" y="114" class="text-msg">1. Click "Export Audit as PDF"</text>
+
+  <line x1="292" y1="150" x2="484" y2="150" class="arrow"/>
+  <text x="305" y="144" class="text-msg">2. POST /api/reports/pdf (Audit Payload)</text>
+
+  <line x1="492" y1="180" x2="669" y2="180" class="arrow"/>
+  <text x="502" y="174" class="text-msg">3. build_audit_pdf(audit_payload)</text>
+
+  <rect x="520" y="198" width="170" height="36" class="note-box"/>
+  <text x="530" y="214" class="text-msg">Render Executive Summary</text>
+  <text x="530" y="226" class="text-sub">Compile size charts &amp; anomalies</text>
+
+  <line x1="669" y1="260" x2="500" y2="260" class="return-arrow"/>
+  <text x="520" y="254" class="text-msg">4. Return compiled PDF binary</text>
+
+  <line x1="484" y1="295" x2="300" y2="295" class="return-arrow"/>
+  <text x="320" y="289" class="text-msg">5. 200 OK (application/pdf stream)</text>
+
+  <line x1="284" y1="325" x2="105" y2="325" class="return-arrow"/>
+  <text x="120" y="319" class="text-msg">6. Trigger browser PDF download</text>
+</svg>
