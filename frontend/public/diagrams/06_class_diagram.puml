@@ -1,0 +1,85 @@
+@startuml class_diagram
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+title Class Diagram: RevAudit Domain Architecture
+
+class User {
+    +id: int
+    +github_id: string
+    +username: string
+    +email: string
+    +avatar_url: string
+    +role: string
+    +created_at: DateTime
+    +get_assigned_prs(): List<PullRequest>
+    +get_review_history(): List<ReviewEvent>
+}
+
+class Repository {
+    +id: int
+    +github_repo_id: string
+    +owner: string
+    +name: string
+    +full_name: string
+    +is_private: boolean
+    +created_at: DateTime
+    +last_audited_at: DateTime
+    +fetch_closed_prs(limit: int): List<PullRequest>
+    +compute_repo_health(): float
+}
+
+class PullRequest {
+    +id: int
+    +github_pr_id: string
+    +number: int
+    +title: string
+    +body: string
+    +body_length: int
+    +author_id: int
+    +state: string
+    +is_merged: boolean
+    +created_at: DateTime
+    +merged_at: DateTime
+    +closed_at: DateTime
+    +review_time_hours: float
+    +size_category: string
+    +is_anomaly: boolean
+    +anomaly_ratio: float
+    +calculate_review_time(): float
+    +categorize_size(): string
+}
+
+class ReviewEvent {
+    +id: int
+    +pr_id: int
+    +reviewer_id: int
+    +state: string
+    +submitted_at: DateTime
+    +body: string
+    +time_to_review_hours: float
+    +is_approving(): boolean
+}
+
+class StatisticalModel {
+    +model_id: string
+    +confidence_level: float
+    +anomaly_multiplier: float
+    +baseline_medians: Dict<string, float>
+    +confidence_intervals: Dict<string, Tuple>
+    +compute_size_baselines(prs: List<PullRequest>): Dict
+    +calculate_confidence_interval(data: List<float>): Tuple
+    +flag_anomalies(prs: List<PullRequest>): List<PullRequest>
+}
+
+' Relationships
+User "1" -- "0..*" Repository : owns / audits >
+Repository "1" *-- "0..*" PullRequest : contains >
+User "1" -- "0..*" PullRequest : authors >
+PullRequest "1" *-- "0..*" ReviewEvent : receives >
+User "1" -- "0..*" ReviewEvent : submits >
+StatisticalModel ..> PullRequest : analyzes & flags >
+StatisticalModel ..> Repository : evaluates >
+
+@enduml

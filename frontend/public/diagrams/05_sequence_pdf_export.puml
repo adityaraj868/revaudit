@@ -1,0 +1,42 @@
+@startuml sequence_pdf_export
+!theme plain
+autonumber
+skinparam BoxPadding 10
+skinparam ParticipantPadding 15
+
+title Sequence Diagram: User Exporting Flagged Analytics to PDF Report
+
+actor "User / Review Lead" as User
+participant "React Frontend\n(Report Generator)" as Frontend
+participant "FastAPI Backend\n(/api/reports/pdf)" as Backend
+participant "ReportLab / PDF Engine\n(Document Renderer)" as PDFEngine
+
+User -> Frontend : Click "Export Audit as PDF" button
+activate Frontend
+
+Frontend -> Frontend : Serialize current audit state\n(repo, baselines, anomaly list, timestamp)
+
+Frontend -> Backend : POST /api/reports/pdf\n{owner, repo, baselines, anomalies, generated_at}
+activate Backend
+
+Backend -> Backend : Validate report schema and token
+
+Backend -> PDFEngine : build_audit_pdf(audit_payload)
+activate PDFEngine
+
+PDFEngine -> PDFEngine : Render Header & Executive Summary
+PDFEngine -> PDFEngine : Build Size-Controlled Baseline Bar Charts
+PDFEngine -> PDFEngine : Generate Anomaly Audit Matrix Table\n(PR#, Author, Review Time, CI Margin)
+PDFEngine -> PDFEngine : Compile PDF binary stream (application/pdf)
+
+PDFEngine --> Backend : Return raw PDF byte buffer
+deactivate PDFEngine
+
+Backend --> Frontend : 200 OK (Content-Type: application/pdf, Content-Disposition: attachment)
+deactivate Backend
+
+Frontend -> Frontend : Create Blob URL & trigger browser download
+Frontend --> User : Download "RevAudit_{owner}_{repo}_{date}.pdf"
+deactivate Frontend
+
+@enduml

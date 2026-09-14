@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Code, 
   Image as ImageIcon, 
@@ -11,12 +11,41 @@ export default function UMLDiagramViewer({ initialDiagramId = '02_sequence_audit
   const [activeDiagramId, setActiveDiagramId] = useState(initialDiagramId);
   const [viewMode, setViewMode] = useState('diagram');
   const [copied, setCopied] = useState(false);
+  const [pumlCode, setPumlCode] = useState('');
 
   const currentDiagram = UML_DIAGRAMS.find(d => d.id === activeDiagramId) || UML_DIAGRAMS[0];
 
+  useEffect(() => {
+    let isMounted = true;
+    const pumlUrl = currentDiagram.pumlPath || `${import.meta.env.BASE_URL}diagrams/${currentDiagram.id}.puml`;
+
+    fetch(pumlUrl)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.text();
+      })
+      .then((text) => {
+        if (isMounted && text && !text.includes('<!doctype html>')) {
+          setPumlCode(text);
+        } else if (isMounted) {
+          setPumlCode(currentDiagram.puml);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setPumlCode(currentDiagram.puml);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentDiagram]);
+
   const handleCopyCode = () => {
+    const codeToCopy = pumlCode || currentDiagram.puml;
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(currentDiagram.puml);
+      navigator.clipboard.writeText(codeToCopy);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -119,7 +148,7 @@ export default function UMLDiagramViewer({ initialDiagramId = '02_sequence_audit
           ) : (
             <div className="relative">
               <pre className="text-xs font-mono text-cyan-200/90 bg-slate-950 p-5 rounded-xl border border-slate-800 overflow-x-auto leading-relaxed max-h-[500px]">
-                {currentDiagram.puml}
+                {pumlCode || currentDiagram.puml}
               </pre>
             </div>
           )}
