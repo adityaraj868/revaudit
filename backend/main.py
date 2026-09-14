@@ -47,6 +47,7 @@ def audit_repository(
     owner: str = Query(..., description="GitHub repository owner/organization"),
     repo: str = Query(..., description="GitHub repository name"),
 ):
+    print(f"[{datetime.now().isoformat()}] Received audit request for {owner}/{repo}", flush=True)
     """
     Analyzes review effort for closed pull requests in a GitHub repository:
     1. Fetches the 30 most recently closed PRs.
