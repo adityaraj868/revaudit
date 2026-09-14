@@ -10,8 +10,9 @@ import {
   Eye,
   ChevronRight
 } from 'lucide-react';
-import heroVideoSrc from '../../../design/hero-background.mp4';
 import iconSvgSrc from '../../../design/icon.svg';
+
+const heroVideoSrc = `${import.meta.env.BASE_URL}hero-background.mp4`;
 
 export default function LandingPage({ 
   onOpenAudit, 
@@ -50,7 +51,6 @@ export default function LandingPage({
             src={heroVideoSrc}
           >
             <source src={heroVideoSrc} type="video/mp4" />
-            <source src="/design/hero-background.mp4" type="video/mp4" />
           </video>
           {/* Subtle Dark Overlay to preserve crisp readability (60% opacity) */}
           <div className="absolute inset-0 bg-[#07090e]/60 bg-gradient-to-b from-[#07090e]/60 via-[#07090e]/50 to-[#07090e]" />
