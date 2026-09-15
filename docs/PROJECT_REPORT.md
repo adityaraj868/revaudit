@@ -7,8 +7,8 @@
 **Team Members:**
 * **Sparsh Khandelwal** — Backend & Statistical Math Engine Lead
 * **Dheeraj** — System Architecture & UML Modeling Lead
-* **Frontend Teammate** — UI/UX & Dashboard Integration Lead
-* **QA & Validation Teammate** — Verification, Edge Cases & Presentation Lead
+* **Adityaraj Singh** — Frontend & UI/UX Integration Lead
+* **Vaibhav Goyal** — Verification, Edge Cases & QA Lead
 
 **Date:** September 2026  
 **Repository:** `/Users/sparshkhandelwal/Desktop/RevAudit`
@@ -185,8 +185,8 @@ The live prototype was executed against the official repository of the FastAPI f
 | :--- | :--- | :--- |
 | **Sparsh Khandelwal** | Backend & Statistical Engine | • Architecture of FastAPI application (`backend/main.py`)<br>• Pandas data processing & imputation pipeline<br>• GitHub REST API integration & error handling<br>• Median baseline, 90% CI, and anomaly multiplier algorithms<br>• Cross-Origin Resource Sharing (CORS) configuration |
 | **Dheeraj** | UML Modeling & System Architecture | • Authored 5 sequence diagrams in PlantUML<br>• Authored the complete domain Class Diagram<br>• Structural system design & entity relationship modeling<br>• Architectural documentation |
-| **Frontend Teammate** | UI/UX & Web Integration | • React + Tailwind CSS dashboard (`frontend/src/App.jsx`)<br>• Dual-view navigation (Presentation Deck vs. Live Demo)<br>• Responsive KPI cards & flagged anomalies matrix<br>• Interactive PlantUML source code inspectors |
-| **QA Teammate** | Verification & Validation | • Live endpoint verification against live repositories<br>• Error state testing (404 repo not found, 403 rate limits)<br>• Presentation rehearsal & academic compliance audit |
+| **Adityaraj Singh** | Frontend & UI/UX Integration | • React + Tailwind CSS dashboard (`frontend/src/App.jsx`)<br>• Dual-view navigation (Presentation Deck vs. Live Demo)<br>• Responsive KPI cards & flagged anomalies matrix<br>• Interactive PlantUML source code inspectors |
+| **Vaibhav Goyal** | QA & Verification | • Live endpoint verification against live repositories<br>• Error state testing (404 repo not found, 403 rate limits)<br>• Presentation rehearsal & academic compliance audit |
 
 ---
 

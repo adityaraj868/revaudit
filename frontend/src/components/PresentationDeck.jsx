@@ -163,7 +163,7 @@ export default function PresentationDeck({ onNavigateToAudit }) {
               <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono">
                 <div className="space-y-0.5">
                   <span className="text-orange-300 font-bold block">Team ArchCoders Presentation</span>
-                  <span className="text-slate-400">Sparsh Khandelwal • Dheeraj • Frontend Teammate • QA Teammate</span>
+                  <span className="text-slate-400">Sparsh Khandelwal • Dheeraj • Adityaraj Singh • Vaibhav Goyal</span>
                 </div>
                 <button
                   onClick={onNavigateToAudit}

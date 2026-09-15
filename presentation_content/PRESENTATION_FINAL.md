@@ -7,8 +7,8 @@
 **Members:** 
 - **Sparsh Khandelwal:** Backend & Math Lead
 - **Dheeraj:** UML & Architecture Lead
-- **Frontend Teammate:** UI/UX & React Integration Lead
-- **QA Teammate:** Validation & Edge Case Lead
+- **Adityaraj Singh:** Frontend Lead
+- **Vaibhav Goyal:** QA Lead
 
 ---
 
@@ -105,12 +105,12 @@
 
 **Grid of Contributions:**
 * **Sparsh Khandelwal (Backend & Math Engine Lead):** FastAPI REST service, Pandas analytical pipeline, GitHub REST API client, statistical median & confidence interval calculations, anomaly multiplier heuristics.
-* **Dheeraj & Teammate 1 (UML & System Architecture Leads):** Authored 5 detailed PlantUML sequence diagrams (OAuth, API fetch, baseline calculation, audit request, PDF export) and the domain class diagram.
-* **Frontend Teammate (UI/UX & Integration Lead):** React + Tailwind SPA, tab-based presentation/demo switcher, responsive anomaly matrix, live loading states.
-* **QA & Validation Lead:** Edge case testing (unmerged PR filtering, rate-limit 403 handling, 404 repository not found), live lab demonstration verification.
+* **Dheeraj (UML & System Architecture Lead):** Authored 5 detailed PlantUML sequence diagrams (OAuth, API fetch, baseline calculation, audit request, PDF export) and the domain class diagram.
+* **Adityaraj Singh (Frontend & UI/UX Lead):** React + Tailwind SPA, tab-based presentation/demo switcher, responsive anomaly matrix, live loading states.
+* **Vaibhav Goyal (QA & Validation Lead):** Edge case testing (unmerged PR filtering, rate-limit 403 handling, 404 repository not found), live lab demonstration verification.
 
 > **🎤 Speaker Notes:**  
-> *"Our team divided responsibilities cleanly: Sparsh developed the Python backend and statistical math engine; Dheeraj led the software architecture and authored all PlantUML diagrams; our frontend teammate integrated the UI dashboard, and QA ensured edge-case resilience."*
+> *"Our team divided responsibilities cleanly: Sparsh developed the Python backend and statistical math engine; Dheeraj led the software architecture and authored all PlantUML diagrams; Adityaraj integrated the UI dashboard, and Vaibhav ensured edge-case resilience."*
 
 ---
 

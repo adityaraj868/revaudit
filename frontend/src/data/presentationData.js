@@ -8,7 +8,7 @@ export const PRESENTATION_SLIDES = [
     metadata: {
       team: 'Team ArchCoders',
       course: 'UCS503 Software Engineering Laboratory',
-      members: ['Sparsh Khandelwal (Backend/Math)', 'Dheeraj (Architecture/UML)', 'Frontend Teammate', 'QA Teammate']
+      members: ['Sparsh Khandelwal (Backend/Math)', 'Dheeraj (Architecture/UML)', 'Adityaraj Singh (Frontend/UI)', 'Vaibhav Goyal (QA/Testing)']
     },
     keyPoints: [
       {
@@ -168,8 +168,8 @@ export const PRESENTATION_SLIDES = [
         ]
       },
       {
-        name: 'Frontend Teammate',
-        role: 'UI/UX & Dashboard Integration Lead',
+        name: 'Adityaraj Singh',
+        role: 'Frontend & UI/UX Integration Lead',
         badge: 'React 19 / Tailwind / SVG Charts',
         deliverables: [
           'Single-page application dashboard with live repository audit console',
@@ -179,8 +179,8 @@ export const PRESENTATION_SLIDES = [
         ]
       },
       {
-        name: 'QA & Validation Teammate',
-        role: 'Verification, Testing & Presentation Lead',
+        name: 'Vaibhav Goyal',
+        role: 'QA, Verification & Testing Lead',
         badge: 'QA / Validation / Slides',
         deliverables: [
           'Edge case testing (unmerged PR filtering, rate limits, 404 not found)',
@@ -190,7 +190,7 @@ export const PRESENTATION_SLIDES = [
         ]
       }
     ],
-    speakerNotes: "Our team divided responsibilities cleanly: Sparsh developed the Python backend and statistical math engine; Dheeraj led the software architecture and authored all PlantUML diagrams; our frontend teammate integrated the UI dashboard, and QA ensured edge-case resilience.",
+    speakerNotes: "Our team divided responsibilities cleanly: Sparsh developed the Python backend and statistical math engine; Dheeraj led the software architecture and authored all PlantUML diagrams; Adityaraj integrated the UI dashboard, and Vaibhav ensured edge-case resilience.",
     diagramId: null
   },
   {
