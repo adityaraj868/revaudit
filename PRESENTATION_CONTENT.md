@@ -16,7 +16,7 @@
 * **Bullet Points:**
   * **Core Problem:** Raw turn-around metrics fail because PR sizes and reviewer workloads vary wildly.
   * **Our Solution:** A statistical anomaly engine using live GitHub REST data to evaluate review latency against size-controlled cohort medians.
-  * **Prototype Status:** Fully functioning live software acting as both presentation deck and operational tool (0% fake data, 100% live GitHub ingestion).
+  * **Prototype Status:** Operational dashboard with paginated GitHub ingestion, optional OAuth, review-event workload analysis, and PDF export.
 
 > **🎤 Speaker Notes:**  
 > *"Good morning Dr. Sukhpal Singh and classmates. Today Team ArchCoders presents RevAudit. In modern software engineering, 'time-to-merge' is often used as a metric for team velocity. However, this metric is fundamentally broken because it treats all pull requests equally. RevAudit normalizes PR turnaround times using statistical baselines and flags true review anomalies."*
@@ -84,7 +84,10 @@
 * **Architecture Highlights:**
   * **Backend (FastAPI & Pandas):** High-throughput Python ASGI framework running a vectorized Pandas data cleaning and grouping pipeline.
   * **Frontend (React + Tailwind CSS):** Single-page application serving both as the dynamic slide deck and the live testing console.
-  * **Stateless by Design:** Zero database dependency for the 4-hour lab prototype constraint; hits live GitHub REST API v3 with automatic rate-limit and 404 detection.
+  * **Persistent Phase 2 Design:** Neon-compatible PostgreSQL stores repositories, PRs, review events, and encrypted OAuth sessions while local SQLite remains available for development.
+  * **Paginated Ingestion:** Follows GitHub Link headers and incrementally stops at the last sync timestamp.
+  * **Reviewer Workload:** Estimates concurrent queue pressure from review-event history.
+  * **PDF Reporting:** Exports the current audit payload as a portable ReportLab PDF.
   * **CORS Architecture:** Configured `CORSMiddleware` enabling browser cross-origin requests between Vite (`:5173`) and FastAPI (`:8000`).
 
 > **🎤 Speaker Notes:**  
@@ -113,13 +116,13 @@
 * **Slide Title:** **Future Roadmap: Scaling to Production**
 * **Visual / Diagrams:** `docs/diagrams/01_sequence_oauth.puml` & `docs/diagrams/05_sequence_pdf_export.puml`
 * **Roadmap Items:**
-  1. **PostgreSQL Persistence:** Migrate from on-the-fly stateless queries to relational storage tracking quarterly team velocity trends.
-  2. **Asynchronous Webhook Ingestion:** Implement Celery + Redis workers listening to GitHub Webhook events (`pull_request.closed`) to eliminate on-demand API latency.
-  3. **Reviewer Workload Modeling:** Expand the anomaly engine to count active concurrent PR assignments per reviewer using Bayesian fatigue modeling.
-  4. **Automated PDF Export:** Direct PDF audit report generation for engineering managers.
+  1. **Asynchronous Webhook Ingestion:** Implement workers listening to GitHub Webhook events (`pull_request.closed`) to eliminate on-demand API latency for very large repositories.
+  2. **Validated Statistical Estimation:** Replace prototype mock confidence intervals with a validated estimator and add large-sample performance tests.
+  3. **Organization Authorization:** Add repository-level permissions and multi-user organization policies around OAuth sessions.
+  4. **Production Reporting:** Add scheduled reports and richer charts to the existing PDF export pipeline.
 
 > **🎤 Speaker Notes:**  
-> *"Looking forward, the next step is adding PostgreSQL for historical sprint baselines, GitHub webhooks for real-time background ingestion, and automated PDF export reports for engineering directors."*
+> *"The prototype now has persistence, OAuth, workload context, and PDF export. The next production step is asynchronous webhook ingestion and organization-level authorization."*
 
 ---
 

@@ -8,7 +8,8 @@ title Sequence Diagram: Contributor Login via GitHub OAuth
 
 actor "Contributor\n(Reviewer/Lead)" as User
 participant "React Frontend\n(RevAudit UI)" as Frontend
-participant "FastAPI Backend\n(Auth Gateway)" as Backend
+participant "FastAPI Backend\n(OAuth Gateway)" as Backend
+database "Neon/Postgres\n(auth_sessions)" as DB
 participant "GitHub OAuth\nProvider" as GitHub
 
 User -> Frontend : Click "Sign in with GitHub"
@@ -18,11 +19,11 @@ Frontend -> GitHub : Redirect to /login/oauth/authorize\n(client_id, scope=repo,
 activate GitHub
 GitHub --> User : Prompt for GitHub Credentials & Scopes
 User -> GitHub : Authorize Application Permissions
-GitHub --> Frontend : Redirect to Callback URL with ?code=AUTH_CODE
+GitHub --> Backend : Redirect to Callback URL with ?code=AUTH_CODE
 deactivate GitHub
 
-Frontend -> Backend : POST /api/auth/github/callback\n{code: AUTH_CODE}
 activate Backend
+Backend -> Backend : GET /auth/github/callback\n{code: AUTH_CODE, state: STATE}
 
 Backend -> GitHub : POST https://github.com/login/oauth/access_token\n{client_id, client_secret, code}
 activate GitHub
@@ -34,11 +35,15 @@ activate GitHub
 GitHub --> Backend : 200 OK (id, login, avatar_url, email)
 deactivate GitHub
 
-Backend -> Backend : Create Authenticated Session / JWT\n(Store token in memory)
-Backend --> Frontend : 200 OK {user: login, avatar: url, session_token: jwt}
+Backend -> Backend : Validate OAuth state
+Backend -> Backend : Encrypt GitHub access token
+Backend -> DB : Persist user + encrypted OAuth session
+DB --> Backend : Opaque session identifier
+Backend --> Frontend : Redirect with signed browser session
 deactivate Backend
 
-Frontend -> Frontend : Persist session state (Local Storage / State)
+Frontend -> Backend : GET /api/auth/me with session cookie
+Backend --> Frontend : {authenticated: true, user: profile}
 Frontend --> User : Display Authenticated Profile & Repositories
 deactivate Frontend
 

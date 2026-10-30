@@ -10,11 +10,11 @@ participant "FastAPI Service\n(RevAudit Backend)" as Backend
 participant "Requests Client\n(HTTP Session)" as Client
 participant "GitHub REST API v3\n(/repos/{owner}/{repo}/pulls)" as GitHub
 
-Backend -> Client : get_pull_requests(owner, repo, state='closed', limit=30)
+Backend -> Client : list_closed_pull_requests(owner, repo, state='closed')
 activate Client
 
-loop Pagination Loop (until limit reached or no 'next' link)
-    Client -> GitHub : GET /repos/{owner}/{repo}/pulls?state=closed&per_page=30&page={n}\nHeaders: Accept: application/vnd.github.v3+json, User-Agent
+loop Pagination Loop (until sync timestamp, max pages, or no 'next' link)
+    Client -> GitHub : GET /repos/{owner}/{repo}/pulls?state=closed&per_page=100&page={n}\nHeaders: OAuth token, Accept, User-Agent
     activate GitHub
 
     alt HTTP 200 OK (Success)
@@ -30,9 +30,11 @@ loop Pagination Loop (until limit reached or no 'next' link)
     deactivate GitHub
 end
 
-Client --> Backend : Return aggregated PR JSON payload (30 PRs)
+Client --> Backend : Return aggregated PR JSON payload (bounded page limit)
 deactivate Client
 
 Backend -> Backend : Hand off raw PR list to Pandas Data Cleaning Engine
+Backend -> GitHub : GET /pulls/{number}/reviews for merged PRs
+GitHub --> Backend : Review events and reviewer timestamps
 
 @enduml

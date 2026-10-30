@@ -44,6 +44,11 @@ class PullRequest {
     +merged_at: DateTime
     +closed_at: DateTime
     +review_time_hours: float
+    +first_review_at: DateTime
+    +time_to_first_review_hours: float
+    +reviewer_workload: int
+    +review_count: int
+    +review_rounds: int
     +size_category: string
     +is_anomaly: boolean
     +anomaly_ratio: float
@@ -53,13 +58,23 @@ class PullRequest {
 
 class ReviewEvent {
     +id: int
+    +github_review_id: int
     +pr_id: int
     +reviewer_id: int
     +state: string
     +submitted_at: DateTime
+    +reviewer_workload: int
     +body: string
     +time_to_review_hours: float
     +is_approving(): boolean
+}
+
+class AuthSession {
+    +id: int
+    +session_hash: string
+    +user_id: int
+    +encrypted_access_token: string
+    +expires_at: DateTime
 }
 
 class StatisticalModel {
@@ -79,6 +94,7 @@ Repository "1" *-- "0..*" PullRequest : contains >
 User "1" -- "0..*" PullRequest : authors >
 PullRequest "1" *-- "0..*" ReviewEvent : receives >
 User "1" -- "0..*" ReviewEvent : submits >
+User "1" -- "0..*" AuthSession : owns >
 StatisticalModel ..> PullRequest : analyzes & flags >
 StatisticalModel ..> Repository : evaluates >
 

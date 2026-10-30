@@ -6,7 +6,10 @@ import {
   AlertTriangle, 
   Scale, 
   Cpu, 
-  Code2
+  Code2,
+  Users,
+  ShieldCheck,
+  FileDown
 } from 'lucide-react';
 import PageHeader from './PageHeader';
 import UMLDiagramViewer from './UMLDiagramViewer';
@@ -18,19 +21,20 @@ export default function MethodologyView() {
     {
       step: 1,
       name: 'Ingestion & Triage',
-      title: '1. Live GitHub REST API Ingestion',
-      subtitle: 'Non-destructive querying of recent closed pull requests',
+      title: '1. Paginated GitHub REST API Ingestion',
+      subtitle: 'Bounded historical PR and review-event retrieval',
       icon: GitPullRequest,
       content: (
         <div className="space-y-3 font-sans text-xs text-slate-300 leading-relaxed">
           <p>
-            RevAudit queries GitHub's public REST API v3 (<code className="text-blue-300 font-mono">/repos/&#123;owner&#125;/&#123;repo&#125;/pulls?state=closed&amp;per_page=30</code>) to retrieve live closed pull request histories without requiring write permissions or invasive webhook installation.
+            RevAudit queries GitHub's REST API v3 (<code className="text-blue-300 font-mono">/repos/&#123;owner&#125;/&#123;repo&#125;/pulls?state=closed&amp;per_page=100</code>) and follows Link headers until the configured page limit or the last sync timestamp. Merged PRs then load their review events for workload analysis.
           </p>
           <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 font-mono text-[11px] space-y-1">
             <span className="text-blue-400 font-semibold block">// API Client Parameter Spec</span>
             <div>Endpoint: <span className="text-slate-200">https://api.github.com/repos/:owner/:repo/pulls</span></div>
             <div>Headers: <span className="text-slate-400">Accept: application/vnd.github.v3+json, User-Agent</span></div>
-            <div>Rate-Limit Handling: <span className="text-amber-400">HTTP 403 backoff / X-RateLimit inspection</span></div>
+            <div>Pagination: <span className="text-slate-400">Link-header traversal with incremental sync stop</span></div>
+            <div>Rate-Limit Handling: <span className="text-amber-400">HTTP 403 handling / X-RateLimit inspection</span></div>
           </div>
         </div>
       )
@@ -132,6 +136,44 @@ export default function MethodologyView() {
           </div>
         </div>
       )
+    },
+    {
+      step: 6,
+      name: 'Reviewer Workload',
+      title: '6. Review Events & Queue Workload',
+      subtitle: 'Measuring reviewer context at first review',
+      icon: Users,
+      content: (
+        <div className="space-y-3 font-sans text-xs text-slate-300 leading-relaxed">
+          <p>
+            Each merged PR stores its GitHub review events. For the first review, RevAudit counts other PRs previously reviewed by that reviewer that were still open at the event timestamp.
+          </p>
+          <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 font-mono text-[11px] space-y-1.5">
+            <span className="text-teal-400 font-semibold block">Why this step exists:</span>
+            <div className="text-slate-300">Raw review duration mixes code complexity with queue pressure. The workload snapshot provides a transparent context variable without claiming access to private assignment data.</div>
+            <div className="text-slate-400">Output: first-review latency, concurrent workload, review count, review rounds, and workload correlation.</div>
+          </div>
+        </div>
+      )
+    },
+    {
+      step: 7,
+      name: 'Access & Reporting',
+      title: '7. OAuth Access & PDF Reporting',
+      subtitle: 'Secure user-scoped access and portable results',
+      icon: ShieldCheck,
+      content: (
+        <div className="space-y-3 font-sans text-xs text-slate-300 leading-relaxed">
+          <p>
+            Optional GitHub OAuth supplies a user-scoped token for private or rate-limited repositories. The backend validates OAuth state and encrypts the token in a server-side session. The current audit payload can then be exported through the ReportLab PDF endpoint.
+          </p>
+          <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 font-mono text-[11px] space-y-1.5">
+            <div><span className="text-blue-400">Auth:</span> <span className="text-slate-300">GET /auth/github/login → /auth/github/callback</span></div>
+            <div><span className="text-orange-400">Report:</span> <span className="text-slate-300">POST /api/reports/pdf → downloadable audit.pdf</span></div>
+            <div><FileDown className="inline w-3 h-3 mr-1 text-orange-400" />The report preserves baselines, workload summary, and anomalies shown in the dashboard.</div>
+          </div>
+        </div>
+      )
     }
   ];
 
@@ -139,7 +181,7 @@ export default function MethodologyView() {
     <div className="space-y-6">
       <PageHeader
         title="Methodology &amp; System Architecture"
-        subtitle="The five-stage statistical data processing pipeline and complete PlantUML architectural model suite"
+        subtitle="The seven-stage ingestion, statistical, workload, access, and reporting pipeline"
         badges={[
           { label: 'Non-Parametric Medians', color: 'bg-slate-800 text-slate-300 border-slate-700' },
           { label: '90% CI Bounds', color: 'bg-slate-800 text-slate-300 border-slate-700' },
@@ -147,12 +189,12 @@ export default function MethodologyView() {
         ]}
       />
 
-      {/* 5-Stage Pipeline Interactive Walkthrough */}
+      {/* 7-Stage Pipeline Interactive Walkthrough */}
       <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900 space-y-5">
         <div>
           <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider flex items-center space-x-2">
             <Cpu className="w-4 h-4 text-orange-400" />
-            <span>Five-Stage Statistical Analysis Pipeline</span>
+            <span>Seven-Stage RevAudit Implementation Pipeline</span>
           </h3>
           <p className="text-xs text-slate-400 mt-1">
             From raw GitHub JSON events to size-controlled anomaly classification with confidence bounds.
@@ -160,7 +202,7 @@ export default function MethodologyView() {
         </div>
 
         {/* Pipeline Step Selector */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 font-mono text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 font-mono text-xs">
           {pipelineSteps.map((step) => {
             const Icon = step.icon;
             const isActive = activeStep === step.step;
@@ -203,7 +245,7 @@ export default function MethodologyView() {
                   </span>
                 </div>
                 <span className="text-xs font-mono font-medium text-orange-400 px-2 py-0.5 rounded bg-orange-500/10 border border-orange-500/20">
-                  Stage {current.step} of 5
+                  Stage {current.step} of 7
                 </span>
               </div>
               {current.content}

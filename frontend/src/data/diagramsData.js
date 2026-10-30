@@ -8,7 +8,7 @@ export const UML_DIAGRAMS = [
     pumlPath: `${import.meta.env.BASE_URL}diagrams/01_sequence_oauth.puml`,
     fallbackSvg: `${import.meta.env.BASE_URL}diagrams/01_sequence_oauth.svg`,
     sourceFile: 'docs/diagrams/01_sequence_oauth.puml',
-    description: 'Models user authentication, GitHub OAuth authorization handoff, FastAPI JWT session generation, and client state persistence.',
+    description: 'Models GitHub OAuth authorization handoff, state validation, encrypted server-side session persistence, and client session restoration.',
     puml: `@startuml sequence_oauth
 !theme plain
 autonumber
@@ -19,7 +19,8 @@ title Sequence Diagram: Contributor Login via GitHub OAuth
 
 actor "Contributor\\n(Reviewer/Lead)" as User
 participant "React Frontend\\n(RevAudit UI)" as Frontend
-participant "FastAPI Backend\\n(Auth Gateway)" as Backend
+participant "FastAPI Backend\\n(OAuth Gateway)" as Backend
+database "Neon/Postgres\\n(auth_sessions)" as DB
 participant "GitHub OAuth\\nProvider" as GitHub
 
 User -> Frontend : Click "Sign in with GitHub"
@@ -29,10 +30,10 @@ Frontend -> GitHub : Redirect to /login/oauth/authorize\\n(client_id, scope=repo
 activate GitHub
 GitHub --> User : Prompt for GitHub Credentials & Scopes
 User -> GitHub : Authorize Application Permissions
-GitHub --> Frontend : Redirect to Callback URL with ?code=AUTH_CODE
+GitHub --> Backend : Redirect to Callback URL with ?code=AUTH_CODE
 deactivate GitHub
 
-Frontend -> Backend : POST /api/auth/github/callback\\n{code: AUTH_CODE}
+Backend -> Backend : GET /auth/github/callback\\n{code: AUTH_CODE, state: STATE}
 activate Backend
 
 Backend -> GitHub : POST https://github.com/login/oauth/access_token\\n{client_id, client_secret, code}
@@ -45,11 +46,15 @@ activate GitHub
 GitHub --> Backend : 200 OK (id, login, avatar_url, email)
 deactivate GitHub
 
-Backend -> Backend : Create Authenticated Session / JWT\\n(Store token in memory)
-Backend --> Frontend : 200 OK {user: login, avatar: url, session_token: jwt}
+Backend -> Backend : Validate OAuth state
+Backend -> Backend : Encrypt GitHub access token
+Backend -> DB : Persist user + encrypted OAuth session
+DB --> Backend : Opaque session identifier
+Backend --> Frontend : Redirect with signed browser session
 deactivate Backend
 
-Frontend -> Frontend : Persist session state (Local Storage / State)
+Frontend -> Backend : GET /api/auth/me with session cookie
+Backend --> Frontend : {authenticated: true, user: profile}
 Frontend --> User : Display Authenticated Profile & Repositories
 deactivate Frontend
 
@@ -114,7 +119,7 @@ deactivate Frontend
     pumlPath: `${import.meta.env.BASE_URL}diagrams/03_sequence_github_fetch.puml`,
     fallbackSvg: `${import.meta.env.BASE_URL}diagrams/03_sequence_github_fetch.svg`,
     sourceFile: 'docs/diagrams/03_sequence_github_fetch.puml',
-    description: 'Details the HTTP client layer: closed PR querying, rate-limit check (403), missing repository handling (404), and JSON parsing.',
+    description: 'Details bounded Link-header pagination, incremental sync stopping, review-event retrieval, rate-limit handling (403), and missing repository handling (404).',
     puml: `@startuml sequence_github_fetch
 !theme plain
 autonumber
@@ -127,11 +132,11 @@ participant "FastAPI Service\\n(RevAudit Backend)" as Backend
 participant "Requests Client\\n(HTTP Session)" as Client
 participant "GitHub REST API v3\\n(/repos/{owner}/{repo}/pulls)" as GitHub
 
-Backend -> Client : get_pull_requests(owner, repo, state='closed', limit=30)
+Backend -> Client : list_closed_pull_requests(owner, repo, state='closed')
 activate Client
 
-loop Pagination Loop (until limit reached or no 'next' link)
-    Client -> GitHub : GET /repos/{owner}/{repo}/pulls?state=closed&per_page=30&page={n}\\nHeaders: Accept: application/vnd.github.v3+json, User-Agent
+loop Pagination Loop (until sync timestamp, max pages, or no 'next' link)
+    Client -> GitHub : GET /repos/{owner}/{repo}/pulls?state=closed&per_page=100&page={n}\\nHeaders: OAuth token, Accept, User-Agent
     activate GitHub
 
     alt HTTP 200 OK (Success)
@@ -147,10 +152,12 @@ loop Pagination Loop (until limit reached or no 'next' link)
     deactivate GitHub
 end
 
-Client --> Backend : Return aggregated PR JSON payload (30 PRs)
+Client --> Backend : Return aggregated PR JSON payload (bounded page limit)
 deactivate Client
 
 Backend -> Backend : Hand off raw PR list to Pandas Data Cleaning Engine
+Backend -> GitHub : GET /pulls/{number}/reviews for merged PRs
+GitHub --> Backend : Review events and reviewer timestamps
 
 @enduml`
   },
@@ -216,7 +223,7 @@ deactivate Pandas
     pumlPath: `${import.meta.env.BASE_URL}diagrams/05_sequence_pdf_export.puml`,
     fallbackSvg: `${import.meta.env.BASE_URL}diagrams/05_sequence_pdf_export.svg`,
     sourceFile: 'docs/diagrams/05_sequence_pdf_export.puml',
-    description: 'Documents future reporting pipeline: serialization of audit metrics, server-side PDF document compilation with ReportLab, and binary stream download.',
+    description: 'Documents the implemented reporting pipeline: serialization of audit metrics, server-side PDF compilation with ReportLab, and binary stream download.',
     puml: `@startuml sequence_pdf_export
 !theme plain
 autonumber
@@ -235,10 +242,10 @@ activate Frontend
 
 Frontend -> Frontend : Serialize current audit state\\n(repo, baselines, anomaly list, timestamp)
 
-Frontend -> Backend : POST /api/reports/pdf\\n{owner, repo, baselines, anomalies, generated_at}
+Frontend -> Backend : POST /api/reports/pdf\\n{owner, repo, baselines, workload, anomalies}
 activate Backend
 
-Backend -> Backend : Validate report schema and token
+Backend -> Backend : Validate audit payload
 
 Backend -> PDFEngine : build_audit_pdf(audit_payload)
 activate PDFEngine

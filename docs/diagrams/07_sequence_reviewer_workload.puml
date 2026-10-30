@@ -1,0 +1,30 @@
+@startuml sequence_reviewer_workload
+!theme plain
+autonumber
+skinparam BoxPadding 10
+skinparam ParticipantPadding 15
+
+title Sequence Diagram: Reviewer Workload Snapshot
+
+participant "GitHub REST API" as GitHub
+participant "FastAPI Sync" as API
+database "review_events" as Events
+participant "Workload Analyzer" as Model
+participant "React Dashboard" as UI
+
+API -> GitHub : GET /pulls/{number}/reviews
+GitHub --> API : Reviewer, state, submitted_at
+API -> Events : Upsert review event by GitHub review ID
+API -> Model : Analyze events grouped by reviewer
+Model -> Model : For each event, find other PRs\npreviously reviewed by reviewer
+Model -> Model : Keep PRs open at event timestamp
+Model --> API : First-review workload, rounds,\nlatency correlation, slope
+API --> UI : workload_summary + PR metrics
+UI --> UI : Render queue metric and audit report
+
+note right of Model
+Workload is a transparent queue-congestion proxy,
+not a claim about private assignment state.
+end note
+
+@enduml

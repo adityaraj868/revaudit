@@ -20,7 +20,7 @@
 **Bullet Points:**
 * **Core Problem:** Raw turn-around metrics fail because PR sizes and reviewer workloads vary wildly.
 * **Our Solution:** A statistical anomaly engine using live GitHub REST data to evaluate review latency against size-controlled cohort medians.
-* **Prototype Status:** Fully functioning live software acting as both presentation deck and operational tool (0% fake data, 100% live GitHub ingestion).
+* **Prototype Status:** Operational dashboard with paginated GitHub ingestion, optional OAuth, review-event workload analysis, and PDF export.
 
 > **🎤 Speaker Notes:**  
 > *"Good morning Dr. Sukhpal Singh and classmates. Today Team ArchCoders presents RevAudit. In modern software engineering, 'time-to-merge' is often used as a metric for team velocity. However, this metric is fundamentally broken because it treats all pull requests equally. RevAudit normalizes PR turnaround times using statistical baselines and flags true review anomalies."*
@@ -92,7 +92,10 @@
 **Architecture Highlights:**
 * **Backend (FastAPI & Pandas):** High-throughput Python ASGI framework running a vectorized Pandas data cleaning and grouping pipeline.
 * **Frontend (React + Tailwind CSS):** Single-page application serving both as the dynamic slide deck and the live testing console.
-* **Stateless by Design:** Zero database dependency for the 4-hour lab prototype constraint; hits live GitHub REST API v3 with automatic rate-limit and 404 detection.
+* **Persistent Phase 2 Design:** Neon-compatible PostgreSQL stores repositories, PRs, review events, and encrypted OAuth sessions while local SQLite remains available for development.
+* **Paginated Ingestion:** The backend follows GitHub Link headers and incrementally stops at the last sync timestamp.
+* **Reviewer Workload:** Review-event history estimates concurrent queue pressure at the first review and reports its relationship to review delay.
+* **PDF Reporting:** The current audit payload can be exported as a portable ReportLab PDF.
 * **CORS Architecture:** Configured `CORSMiddleware` enabling browser cross-origin requests between Vite (`:5173`) and FastAPI (`:8000`).
 
 > **🎤 Speaker Notes:**  
@@ -119,13 +122,13 @@
 **Visual / Diagrams:** `docs/diagrams/01_sequence_oauth.puml` & `docs/diagrams/05_sequence_pdf_export.puml`  
 
 **Roadmap Items:**
-1. **PostgreSQL Persistence:** Migrate from on-the-fly stateless queries to relational storage tracking quarterly team velocity trends.
-2. **Asynchronous Webhook Ingestion:** Implement Celery + Redis workers listening to GitHub Webhook events (`pull_request.closed`) to eliminate on-demand API latency.
-3. **Reviewer Workload Modeling:** Expand the anomaly engine to count active concurrent PR assignments per reviewer using Bayesian fatigue modeling.
-4. **Automated PDF Export:** Direct PDF audit report generation for engineering managers.
+1. **Asynchronous Webhook Ingestion:** Implement workers listening to GitHub Webhook events (`pull_request.closed`) to eliminate on-demand API latency for very large repositories.
+2. **Validated Statistical Estimation:** Replace prototype mock confidence intervals with a validated estimator and add large-sample performance tests.
+3. **Organization Authorization:** Add repository-level permissions and multi-user organization policies around OAuth sessions.
+4. **Production Reporting:** Add scheduled reports and richer charts to the existing PDF export pipeline.
 
 > **🎤 Speaker Notes:**  
-> *"Looking forward, the next step is adding PostgreSQL for historical sprint baselines, GitHub webhooks for real-time background ingestion, and automated PDF export reports for engineering directors."*
+> *"The prototype now persists review history, uses OAuth when needed, estimates reviewer queue pressure, and exports reports. The next production step is asynchronous webhook ingestion and stronger organization-level authorization."*
 
 ---
 
@@ -134,9 +137,10 @@
 **Call to Action:** Switch from "Presentation Deck" tab to "Live Demo" tab.  
 
 **Demonstration Steps:**
-1. Input `fastapi/fastapi` or `pallets/flask`.
-2. Click **Run Audit**.
-3. Observe real-time data ingestion, cohort medians, and the flagged anomaly table.
+1. Optionally click **GitHub Sign In** to authorize a user-scoped token.
+2. Input `fastapi/fastapi` or `pallets/flask`.
+3. Click **Run Audit** and observe paginated ingestion, review-event sync, cohort medians, workload metrics, and the flagged anomaly table.
+4. Click **PDF Report** to download the current audit.
 
 > **🎤 Speaker Notes:**  
 > *"Now, let's step away from the slides and demonstrate the working software live on GitHub repositories. We'll start by checking the latest PRs on FastAPI..."*
@@ -147,8 +151,8 @@
 **Slide Title:** Conclusion & Questions  
 
 **Summary Points:**
-* RevAudit successfully proves that statistical normalization is required for fair code review analysis.
-* Proved our hypothesis using live data in a stateless, high-throughput environment.
+* RevAudit demonstrates why statistical normalization is required for fair code review analysis.
+* The implementation now combines live paginated GitHub data, persistent review history, workload context, and portable reports.
 
 > **🎤 Speaker Notes:**  
 > *"Thank you for your time. RevAudit is live and ready for production use. We are now happy to take any questions you might have about our methodology, architecture, or empirical findings."*

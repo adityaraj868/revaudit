@@ -16,10 +16,10 @@ activate Frontend
 
 Frontend -> Frontend : Serialize current audit state\n(repo, baselines, anomaly list, timestamp)
 
-Frontend -> Backend : POST /api/reports/pdf\n{owner, repo, baselines, anomalies, generated_at}
+Frontend -> Backend : POST /api/reports/pdf\n{owner, repo, baselines, workload, anomalies}
 activate Backend
 
-Backend -> Backend : Validate report schema and token
+Backend -> Backend : Validate audit payload
 
 Backend -> PDFEngine : build_audit_pdf(audit_payload)
 activate PDFEngine

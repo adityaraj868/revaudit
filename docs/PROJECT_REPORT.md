@@ -19,7 +19,7 @@
 
 Code review turnaround time is one of the most widely referenced engineering velocity metrics in modern collaborative software development. However, flat metrics like arithmetic mean "time-to-merge" fail empirically because they do not control for confounding variables—chiefly pull request (PR) complexity and reviewer workload. This creates perverse incentives where reviewers are rewarded for trivial, uncritical approvals ("LGTM") and penalized for thorough investigations of large, high-risk code modifications.
 
-**RevAudit** is an academic prototype engineered to solve this "Invisible Variation" problem. Built within a strict 4-hour rapid prototyping window, RevAudit connects directly to GitHub's public REST API v3 to ingest live pull request histories. It imputes missing data by discarding unmerged PRs, stratifies PRs into complexity cohorts using body length proxies, computes non-parametric median review latencies with 90% confidence intervals, and flags statistically significant review effort anomalies (> 1.5× group median). The accompanying web application serves dual purposes: an interactive slide deck for academic evaluation and an operational audit dashboard.
+**RevAudit** is an academic prototype engineered to solve this "Invisible Variation" problem. Built within a rapid-prototyping window, RevAudit connects to GitHub's REST API v3, paginates pull-request history, persists PR and review-event records, and optionally uses GitHub OAuth for user-scoped access. It imputes missing data by discarding unmerged PRs, stratifies PRs into complexity cohorts using body length proxies, computes non-parametric median review latencies with 90% confidence intervals, adds a transparent reviewer-workload queue proxy, and flags review effort anomalies (> 1.5× group median). The accompanying web application serves dual purposes: an interactive slide deck for academic evaluation and an operational audit dashboard with PDF export.
 
 ---
 
@@ -94,7 +94,7 @@ $$\mathcal{R}_i = \frac{\Delta t_i}{\tilde{x}_C}$$
                             ▼
 ┌────────────────────────────────────────────────────────┐
 │               FastAPI Server (:8000)                   │
-│      (CORS Enabled, Error Handling, JSON Routing)      │
+│ (OAuth, CORS, Pagination, Review Sync, PDF, JSON API)  │
 └─────────────┬───────────────────────────┬──────────────┘
               │                           │
               ▼                           ▼
@@ -117,7 +117,7 @@ $$\mathcal{R}_i = \frac{\Delta t_i}{\tilde{x}_C}$$
 
 ### 4.1 Sequence Diagram: Contributor Login via GitHub OAuth
 *File: `docs/diagrams/01_sequence_oauth.puml`*
-Models user authentication, token delegation from GitHub's OAuth server, JWT generation by FastAPI, and secure profile persistence on the frontend.
+Models user authentication, OAuth state validation, encrypted server-side token persistence, and session restoration in the frontend.
 
 ### 4.2 Sequence Diagram: Frontend Requesting Repo Audit
 *File: `docs/diagrams/02_sequence_audit_request.puml`*
@@ -133,15 +133,16 @@ Traces the internal data lifecycle: JSON ingestion $\to$ DataFrame conversion $\
 
 ### 4.5 Sequence Diagram: PDF Export Pipeline
 *File: `docs/diagrams/05_sequence_pdf_export.puml`*
-Documents the future-scope reporting subsystem: client serialization of audit parameters, backend PDF compilation using ReportLab, and binary stream download to the client.
+Documents the implemented reporting subsystem: client serialization of the audit response, backend PDF compilation using ReportLab, and binary stream download to the client.
 
 ### 4.6 Domain Class Diagram
 *File: `docs/diagrams/06_class_diagram.puml`*
 Specifies the primary domain model entities:
 * `User`: Attributes (`id`, `github_id`, `username`, `role`), methods (`get_assigned_prs()`, `get_review_history()`).
 * `Repository`: Attributes (`id`, `owner`, `name`, `last_audited_at`), methods (`fetch_closed_prs()`, `compute_repo_health()`).
-* `PullRequest`: Attributes (`number`, `body_length`, `review_time_hours`, `size_category`, `is_anomaly`), methods (`calculate_review_time()`, `categorize_size()`).
-* `ReviewEvent`: Attributes (`id`, `reviewer_id`, `state`, `time_to_review_hours`), methods (`is_approving()`).
+* `PullRequest`: Attributes (`number`, `body_length`, `review_time_hours`, `size_category`, `first_review_at`, `reviewer_workload`, `is_anomaly`), methods (`calculate_review_time()`, `categorize_size()`).
+* `ReviewEvent`: Attributes (`id`, `github_review_id`, `reviewer_id`, `state`, `submitted_at`, `reviewer_workload`), methods (`is_approving()`).
+* `AuthSession`: Attributes (`session_hash`, `user_id`, `encrypted_access_token`, `expires_at`) for server-side GitHub OAuth sessions.
 * `StatisticalModel`: Attributes (`anomaly_multiplier`, `confidence_level`, `baseline_medians`), methods (`compute_size_baselines()`, `calculate_confidence_interval()`, `flag_anomalies()`).
 
 ---
@@ -190,21 +191,27 @@ The live prototype was executed against the official repository of the FastAPI f
 
 ---
 
-## 7. Future Work: Scaling to Production
+## 7. Phase 2 Implementation and Remaining Production Work
 
-While the 4-hour prototype satisfies all academic lab requirements without external database overhead, an enterprise-grade deployment requires:
+The implementation now includes the first Phase 2 features that were previously
+represented only in the architecture diagrams:
 
-1. **Persistent Relational Database (PostgreSQL):**
-   * Schema for historical pull request archives.
-   * Long-term trend tracking of engineering sprint health across quarters.
-2. **Asynchronous Ingestion (Celery + Redis):**
-   * Eliminating HTTP request timeouts when auditing large repos (e.g., 5,000+ PRs).
-   * Ingesting live GitHub Webhooks on `pull_request.closed` events.
-3. **Reviewer Workload Modeling:**
-   * Tracking the concurrency of reviewers at PR creation timestamp.
-   * Modeling reviewer fatigue using Bayesian regression.
-4. **Export Engine:**
-   * Automated PDF report generation using ReportLab or headless browser rendering.
+1. **Persistent relational storage:** Neon-compatible SQLAlchemy models store
+   repositories, users, pull requests, review events, and encrypted OAuth
+   sessions.
+2. **Paginated ingestion:** GitHub `Link` headers are followed up to a bounded
+   page limit, with incremental stopping at the last repository sync.
+3. **GitHub OAuth:** The FastAPI callback validates OAuth state, encrypts the
+   access token server-side, and exposes session state to the frontend.
+4. **Reviewer workload modeling:** Review events are used to estimate the
+   number of other open PRs previously reviewed by the first reviewer.
+5. **PDF export:** The current audit payload can be rendered as a downloadable
+   ReportLab PDF.
+
+Remaining production work includes asynchronous webhook ingestion for very large
+repositories, a statistically validated confidence-interval estimator, stronger
+authorization policy for multi-user organizations, and load/performance testing
+against large real-world histories.
 
 ---
 

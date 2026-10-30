@@ -116,26 +116,26 @@ export const PRESENTATION_SLIDES = [
     num: '05',
     category: 'System Design',
     title: 'System Architecture & Rapid Prototype Constraints',
-    subtitle: 'High-throughput stateless Python ASGI backend with React + Tailwind SPA',
+    subtitle: 'FastAPI + React audit platform with persistence, workload context, and reporting',
     architecturePoints: [
       {
         layer: 'FastAPI Backend (:8000)',
-        details: 'Python ASGI server running vectorized Pandas data grouping, outlier detection, and GitHub REST API v3 client with error and rate-limit handling.'
+        details: 'Python ASGI server with GitHub OAuth, bounded Link-header pagination, review-event sync, Pandas analytics, workload metrics, and PDF export.'
       },
       {
         layer: 'React Frontend Dashboard (:5173)',
         details: 'Modern reactive SPA serving both as the interactive presentation deck and operational review audit console with instant state synchronization.'
       },
       {
-        layer: 'Stateless Prototype Constraint',
-        details: 'Engineered within academic 4-hour constraints: zero relational database bloat, on-demand live querying, and resilient error recovery.'
+        layer: 'Neon-Compatible Persistence',
+        details: 'SQLAlchemy stores repositories, PRs, review events, and encrypted OAuth sessions; local SQLite remains available for development.'
       },
       {
         layer: 'CORS & Deployment Ready',
         details: 'Fully configured CORS middleware enabling cross-origin integration between Vite frontend, local backend, and production Render endpoints.'
       }
     ],
-    speakerNotes: "Our architecture was designed for rapid empirical research. We avoided the operational friction of setting up heavy databases upfront, prioritizing a clean, live-data statistical engine using FastAPI and Pandas paired with an interactive React dashboard.",
+    speakerNotes: "The current architecture keeps the original FastAPI and Pandas engine while adding the persistence required for pagination, review-event workload analysis, OAuth sessions, and portable PDF reports.",
     diagramId: '06_class_diagram'
   },
   {
@@ -197,27 +197,27 @@ export const PRESENTATION_SLIDES = [
     id: '07_roadmap',
     num: '07',
     category: 'Future Scope',
-    title: 'Future Work: Scaling to Production Infrastructure',
+    title: 'Remaining Work: Scaling to Production Infrastructure',
     subtitle: 'Architectural roadmap for transitioning from lab prototype to enterprise audit platform',
     roadmapItems: [
       {
-        title: '1. Persistent PostgreSQL Database',
-        desc: 'Migrate from on-demand stateless queries to relational storage tracking quarterly team review velocity trends and sprint-over-sprint baseline shifts.'
+        title: '1. Asynchronous Webhook Ingestion',
+        desc: 'Deploy background workers listening to GitHub Webhook events (pull_request.closed) to eliminate on-demand latency for very large repositories.'
       },
       {
-        title: '2. Asynchronous Webhook Ingestion (Celery + Redis)',
-        desc: 'Deploy background worker queues listening to GitHub Webhook events (pull_request.closed) to eliminate on-demand HTTP query latency for large repos (5,000+ PRs).'
+        title: '2. Validated Statistical Estimation',
+        desc: 'Replace prototype mock confidence intervals with a validated estimator and add large-sample performance tests.'
       },
       {
-        title: '3. Reviewer Concurrency & Fatigue ML Model',
-        desc: 'Expand the anomaly engine to count active concurrent PR assignments per reviewer using Bayesian regression to isolate reviewer capacity constraints.'
+        title: '3. Organization Authorization',
+        desc: 'Add repository-level permissions and multi-user organization policies around OAuth sessions.'
       },
       {
-        title: '4. Automated PDF Audit Report Generation',
-        desc: 'Implement ReportLab or headless browser export pipeline generating executive PDF audit summaries for engineering leads and project stakeholders.'
+        title: '4. Production Reporting',
+        desc: 'Add scheduled reports and richer charts to the existing PDF export pipeline.'
       }
     ],
-    speakerNotes: "Looking forward, the next step is adding PostgreSQL for historical sprint baselines, GitHub webhooks for real-time background ingestion, and automated PDF export reports for engineering directors.",
+    speakerNotes: "Persistence, OAuth, reviewer workload context, and PDF export are now implemented. The next production step is asynchronous webhook ingestion and stronger organization-level authorization.",
     diagramId: '05_sequence_pdf_export'
   },
   {

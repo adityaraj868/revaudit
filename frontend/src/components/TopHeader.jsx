@@ -7,7 +7,9 @@ import {
   GitPullRequest, 
   Presentation, 
   ChevronRight, 
-  SlidersHorizontal
+  SlidersHorizontal,
+  LogIn,
+  LogOut
 } from 'lucide-react';
 import { SAMPLE_REPOSITORIES } from '../data/sampleAudits';
 import iconSvgSrc from '../../../design/icon.svg';
@@ -21,7 +23,10 @@ export default function TopHeader({
   loading,
   currentRepo,
   mobileOpen,
-  setMobileOpen
+  setMobileOpen,
+  authUser,
+  onLogin,
+  onLogout
 }) {
   const [showQuickPicker, setShowQuickPicker] = useState(false);
 
@@ -173,6 +178,30 @@ export default function TopHeader({
             >
               <GitPullRequest className="w-3 h-3 text-slate-400" />
               <span className="hidden sm:inline">Back to Overview</span>
+            </button>
+          )}
+
+          {authUser ? (
+            <button
+              onClick={onLogout}
+              title={`Sign out @${authUser.login}`}
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/80 rounded-md text-xs transition-colors flex items-center space-x-1.5"
+            >
+              {authUser.avatar_url ? (
+                <img src={authUser.avatar_url} alt="" className="w-4 h-4 rounded-full" />
+              ) : (
+                <LogOut className="w-3 h-3" />
+              )}
+              <span className="hidden lg:inline">@{authUser.login}</span>
+            </button>
+          ) : (
+            <button
+              onClick={onLogin}
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/80 rounded-md text-xs transition-colors flex items-center space-x-1.5"
+              title="Sign in with GitHub to use your OAuth token for audits"
+            >
+              <LogIn className="w-3 h-3" />
+              <span className="hidden lg:inline">GitHub Sign In</span>
             </button>
           )}
         </div>

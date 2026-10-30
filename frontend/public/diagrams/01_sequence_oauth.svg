@@ -56,11 +56,11 @@
   <text x="380" y="234" class="text-msg">5. Callback with ?code=AUTH_CODE</text>
 
   <line x1="292" y1="270" x2="484" y2="270" class="arrow"/>
-  <text x="305" y="264" class="text-msg">6. POST /api/auth/github/callback</text>
+  <text x="305" y="264" class="text-msg">6. GET /auth/github/callback</text>
 
   <line x1="492" y1="295" x2="669" y2="295" class="arrow"/>
   <text x="502" y="289" class="text-msg">7. Exchange code for Access Token</text>
 
   <line x1="484" y1="325" x2="105" y2="325" class="return-arrow"/>
-  <text x="120" y="319" class="text-msg">8. 200 OK (JWT Session Token + Profile)</text>
+  <text x="120" y="319" class="text-msg">8. Encrypted session + profile</text>
 </svg>

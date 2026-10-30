@@ -15,12 +15,15 @@ import LandingPage from './components/LandingPage';
 import ContributorDashboard from './components/ContributorDashboard';
 import { LoadingState, ErrorState } from './components/States';
 import { FALLBACK_AUDIT_DATA } from './data/sampleAudits';
+import { apiUrl } from './lib/api';
 import { 
   GitPullRequest, 
   AlertTriangle, 
   CheckCircle2, 
   Scale, 
   RefreshCw,
+  FileDown,
+  Users,
   ExternalLink
 } from 'lucide-react';
 
@@ -46,6 +49,8 @@ export default function App() {
   const [error, setError] = useState(null);
   const [auditData, setAuditData] = useState(FALLBACK_AUDIT_DATA['fastapi/fastapi']);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [authUser, setAuthUser] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   // Tab navigation handler
   const handleNavigate = (tab) => {
@@ -106,18 +111,11 @@ export default function App() {
     setCurrentRepo(parsed.slug);
 
     try {
-      const renderUrl = `https://revaudit-backend.onrender.com/api/audit?owner=${encodeURIComponent(parsed.owner)}&repo=${encodeURIComponent(parsed.repo)}`;
-      const query = `?owner=${encodeURIComponent(parsed.owner)}&repo=${encodeURIComponent(parsed.repo)}`;
-      const configuredBase = import.meta.env.VITE_API_BASE_URL;
-      const localUrl = `/api/audit${query}`;
-      const primaryUrl = configuredBase
-        ? `${configuredBase.replace(/\/$/, '')}/api/audit${query}`
-        : import.meta.env.DEV ? localUrl : renderUrl;
-
-      let response = await fetch(primaryUrl, { method: 'GET' }).catch(() => null);
-      if ((!response || !response.ok) && primaryUrl === localUrl && !FALLBACK_AUDIT_DATA[parsed.slug]) {
-        response = await fetch(renderUrl, { method: 'GET' }).catch(() => null);
-      }
+      const liveUrl = apiUrl(`/api/audit?owner=${encodeURIComponent(parsed.owner)}&repo=${encodeURIComponent(parsed.repo)}`);
+      let response = await fetch(liveUrl, {
+        method: 'GET',
+        credentials: 'include',
+      }).catch(() => null);
 
       if (response?.ok) {
         setAuditData(await response.json());
@@ -138,6 +136,63 @@ export default function App() {
     }
   };
 
+  const handleExportPdf = async () => {
+    if (!auditData || exporting) return;
+    setExporting(true);
+    setError(null);
+    try {
+      const response = await fetch(apiUrl('/api/reports/pdf'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          owner: parsedActiveRepo.owner,
+          repo: parsedActiveRepo.repo,
+          ...auditData,
+        }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || `PDF export failed with status ${response.status}`);
+      }
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = downloadUrl;
+      anchor.download = `RevAudit_${parsedActiveRepo.owner}_${parsedActiveRepo.repo}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(downloadUrl);
+    } catch (exportError) {
+      setError(exportError.message || 'Unable to export the audit PDF.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleLogin = () => {
+    window.location.assign(apiUrl('/auth/github/login'));
+  };
+
+  const handleLogout = async () => {
+    await fetch(apiUrl('/api/auth/logout'), {
+      method: 'POST',
+      credentials: 'include',
+    }).catch(() => null);
+    setAuthUser(null);
+  };
+
+  useEffect(() => {
+    fetch(apiUrl('/api/auth/me'), { credentials: 'include' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((payload) => {
+        if (payload?.authenticated) setAuthUser(payload.user);
+      })
+      .catch(() => null);
+
+  }, []);
+
   // Initial load
   useEffect(() => {
     let ignore = false;
@@ -157,6 +212,11 @@ export default function App() {
   const droppedCount = auditData?.unmerged_prs_dropped || 0;
   const baselineMedians = auditData?.baseline_medians || {};
   const anomalies = auditData?.anomalies || [];
+  const workloadSummary = auditData?.workload_summary || {};
+  const authError = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('auth_error')
+    : null;
+  const displayError = error || (authError ? `GitHub sign-in failed: ${authError}` : null);
 
   // Review health calculation
   const reviewHealthPct = mergedCount > 0 
@@ -222,6 +282,9 @@ export default function App() {
           currentRepo={currentRepo}
           mobileOpen={mobileOpen}
           setMobileOpen={setMobileOpen}
+          authUser={authUser}
+          onLogin={handleLogin}
+          onLogout={handleLogout}
         />
 
         {/* Dynamic Main Content Area */}
@@ -252,13 +315,21 @@ export default function App() {
                       <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
                       <span>Refresh Audit</span>
                     </button>
+                    <button
+                      onClick={handleExportPdf}
+                      disabled={exporting || loading}
+                      className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-slate-950 border border-orange-400 rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer"
+                    >
+                      <FileDown className="w-3.5 h-3.5" />
+                      <span>{exporting ? 'Exporting...' : 'PDF Report'}</span>
+                    </button>
                   </div>
                 }
               />
 
               {/* Error Message */}
-              {error && (
-                <ErrorState error={error} onRetry={() => handleRunAudit(currentRepo)} />
+              {displayError && (
+                <ErrorState error={displayError} onRetry={() => handleRunAudit(currentRepo)} />
               )}
 
               {/* Keep the dashboard visible while a live refresh is in progress. */}
@@ -273,7 +344,7 @@ export default function App() {
                 <div className="space-y-6 animate-fade-in">
                   
                   {/* High Density Metric Cards Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                     <MetricCard
                       label="Evaluated Merged PRs"
                       value={mergedCount}
@@ -311,6 +382,16 @@ export default function App() {
                       status="info"
                       icon={Scale}
                       footnote="v3 REST"
+                    />
+
+                    <MetricCard
+                      label="Reviewer Queue"
+                      value={Number(workloadSummary.average_concurrent_prs || 0).toFixed(1)}
+                      unit="active PRs"
+                      subtext={`${workloadSummary.review_event_count || 0} review events synced`}
+                      status="info"
+                      icon={Users}
+                      footnote="First-review snapshot"
                     />
                   </div>
 

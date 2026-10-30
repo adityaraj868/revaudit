@@ -37,7 +37,7 @@
 
   <!-- Messages -->
   <line x1="130" y1="125" x2="362" y2="125" class="arrow"/>
-  <text x="145" y="118" class="text-msg">1. get_pull_requests(owner, repo, limit=30)</text>
+  <text x="145" y="118" class="text-msg">1. list_closed_pull_requests(owner, repo)</text>
 
   <line x1="370" y1="160" x2="609" y2="160" class="arrow"/>
   <text x="385" y="153" class="text-msg">2. GET /repos/{owner}/{repo}/pulls?state=closed</text>

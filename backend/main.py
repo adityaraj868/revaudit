@@ -1,44 +1,323 @@
-from datetime import datetime
-from typing import Any, Dict, List, Optional
-import math
+from __future__ import annotations
+
+import os
+import secrets
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
+from urllib.parse import urlencode
+
 import requests
-import pandas as pd
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Body, Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse, Response
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.requests import Request
+
+from analytics import analyze_pull_requests, categorize_pr_size, parse_utc_dt
+from auth import (
+    AuthContext,
+    create_auth_session,
+    resolve_auth_session,
+    revoke_auth_session,
+)
+from database import Base, ensure_schema, engine, get_db
+from github_client import GitHubAPIError, GitHubClient
+from models import PullRequest, Repository, ReviewEvent, User
+from reporting import build_audit_pdf
+
+
+# Initialize both fresh databases and existing prototype databases.
+Base.metadata.create_all(bind=engine)
+ensure_schema()
 
 app = FastAPI(
     title="RevAudit Engine",
-    description="Analyzes GitHub PR review effort controlling for PR size and reviewer workload.",
-    version="1.0.0",
+    description=(
+        "Analyzes GitHub PR review effort with paginated ingestion, reviewer "
+        "workload snapshots, and size-controlled anomaly detection."
+    ),
+    version="2.1.0",
 )
 
-# Enable CORS for frontend integration (Vite dev server, local files, etc.)
+frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+allowed_origins = {
+    frontend_url,
+    "http://localhost:5173",
+    "http://localhost:3000",
+}
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=sorted(allowed_origins),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("SESSION_SECRET", "dev-only-change-me"),
+    session_cookie="revaudit_session",
+    max_age=60 * 60 * 24 * 30,
+    same_site="lax",
+    https_only=os.getenv("COOKIE_SECURE", "false").lower() == "true",
+)
 
 
-def categorize_pr_size(body_len: int) -> str:
-    """Categorize PR size based on the character length of the PR description."""
-    if body_len < 250:
-        return "Small"
-    elif body_len < 1000:
-        return "Medium"
-    else:
-        return "Large"
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def get_or_create_user(db: Session, user_dict: Optional[Dict[str, Any]]) -> Optional[User]:
+    """Find a GitHub user by stable ID, then update its public profile fields."""
+    if not user_dict or not isinstance(user_dict, dict) or not user_dict.get("login"):
+        return None
+
+    github_id = user_dict.get("id")
+    user = None
+    if github_id is not None:
+        user = db.query(User).filter(User.github_id == github_id).first()
+    if user is None:
+        user = db.query(User).filter(User.login == user_dict["login"]).first()
+    if user is None:
+        user = User(login=user_dict["login"], github_id=github_id)
+        db.add(user)
+
+    user.login = user_dict["login"]
+    user.github_id = github_id or user.github_id
+    user.avatar_url = user_dict.get("avatar_url") or user.avatar_url
+    db.flush()
+    return user
+
+
+def get_optional_auth(
+    request: Request, db: Session = Depends(get_db)
+) -> Optional[AuthContext]:
+    auth_context = resolve_auth_session(db, request.session.get("auth_session_id"))
+    if auth_context is None:
+        request.session.pop("auth_session_id", None)
+    return auth_context
+
+
+def github_oauth_config() -> Dict[str, str]:
+    client_id = os.getenv("GITHUB_CLIENT_ID", "").strip()
+    client_secret = os.getenv("GITHUB_CLIENT_SECRET", "").strip()
+    if not client_id or not client_secret:
+        raise HTTPException(
+            status_code=503,
+            detail="GitHub OAuth is not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.",
+        )
+    return {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "redirect_uri": os.getenv(
+            "GITHUB_REDIRECT_URI", "http://localhost:8000/auth/github/callback"
+        ),
+    }
+
+
+def redirect_to_frontend(**params: str) -> RedirectResponse:
+    query = urlencode(params)
+    target = f"{frontend_url}/?{query}" if query else f"{frontend_url}/"
+    return RedirectResponse(target, status_code=302)
 
 
 @app.get("/")
-def root():
+def root() -> Dict[str, Any]:
     return {
         "service": "RevAudit API",
         "status": "active",
+        "database": "Neon-compatible PostgreSQL/SQLite",
         "docs": "/docs",
         "audit_endpoint": "/api/audit?owner={owner}&repo={repo}",
+        "features": {
+            "github_oauth": "/auth/github/login",
+            "pagination": True,
+            "reviewer_workload": True,
+            "pdf_export": "/api/reports/pdf",
+        },
+    }
+
+
+@app.get("/auth/github/login")
+def github_login(request: Request) -> RedirectResponse:
+    config = github_oauth_config()
+    state = secrets.token_urlsafe(32)
+    request.session["oauth_state"] = state
+    oauth_query = {
+        "client_id": config["client_id"],
+        "redirect_uri": config["redirect_uri"],
+        "state": state,
+    }
+    # OAuth Apps use scopes; GitHub Apps use the fine-grained permissions
+    # selected in their registration and should leave this value blank.
+    oauth_scope = os.getenv("GITHUB_OAUTH_SCOPE", "read:user user:email repo").strip()
+    if oauth_scope:
+        oauth_query["scope"] = oauth_scope
+    query = urlencode(oauth_query)
+    return RedirectResponse(
+        f"https://github.com/login/oauth/authorize?{query}", status_code=302
+    )
+
+
+@app.get("/auth/github/callback")
+def github_callback(
+    request: Request,
+    code: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    error: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    if error:
+        return redirect_to_frontend(auth_error=error)
+
+    expected_state = request.session.pop("oauth_state", None)
+    if not code or not state or not expected_state or state != expected_state:
+        return redirect_to_frontend(auth_error="OAuth state validation failed")
+
+    config = github_oauth_config()
+    try:
+        token_response = requests.post(
+            "https://github.com/login/oauth/access_token",
+            data={
+                "client_id": config["client_id"],
+                "client_secret": config["client_secret"],
+                "code": code,
+                "redirect_uri": config["redirect_uri"],
+            },
+            headers={"Accept": "application/json"},
+            timeout=20,
+        )
+        if token_response.status_code != 200:
+            return redirect_to_frontend(auth_error="GitHub token exchange failed")
+        token_payload = token_response.json()
+        access_token = token_payload.get("access_token")
+        if not access_token:
+            return redirect_to_frontend(auth_error="GitHub did not return an access token")
+
+        profile_response = requests.get(
+            "https://api.github.com/user",
+            headers={
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"Bearer {access_token}",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+            timeout=20,
+        )
+        if profile_response.status_code != 200:
+            return redirect_to_frontend(auth_error="GitHub profile lookup failed")
+        profile = profile_response.json()
+    except (requests.RequestException, ValueError):
+        return redirect_to_frontend(auth_error="GitHub OAuth network error")
+
+    user = get_or_create_user(db, profile)
+    if user is None:
+        return redirect_to_frontend(auth_error="GitHub profile did not include a login")
+
+    try:
+        session_id = create_auth_session(db, user, access_token)
+    except RuntimeError as exc:
+        return redirect_to_frontend(auth_error=str(exc))
+    request.session.clear()
+    request.session["auth_session_id"] = session_id
+    return redirect_to_frontend(auth="success")
+
+
+@app.get("/api/auth/me")
+def auth_me(auth_context: Optional[AuthContext] = Depends(get_optional_auth)) -> Dict[str, Any]:
+    if auth_context is None:
+        return {"authenticated": False, "user": None}
+    return {
+        "authenticated": True,
+        "user": {
+            "id": auth_context.user.id,
+            "github_id": auth_context.user.github_id,
+            "login": auth_context.user.login,
+            "avatar_url": auth_context.user.avatar_url,
+        },
+    }
+
+
+@app.post("/api/auth/logout")
+def auth_logout(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> Dict[str, bool]:
+    revoke_auth_session(db, request.session.get("auth_session_id"))
+    request.session.clear()
+    return {"ok": True}
+
+
+def sync_reviews(
+    db: Session,
+    client: GitHubClient,
+    owner: str,
+    repo: str,
+    review_targets: list[PullRequest],
+) -> Dict[str, Any]:
+    """Fetch and idempotently upsert review events for merged PRs."""
+    max_prs = int(os.getenv("GITHUB_REVIEW_MAX_PRS", "250"))
+    synced_prs = 0
+    synced_events = 0
+    error = None
+
+    for pull_request in review_targets[:max_prs]:
+        try:
+            reviews = client.list_reviews(owner, repo, pull_request.pr_number)
+        except GitHubAPIError as exc:
+            error = exc.message
+            break
+
+        for review in reviews:
+            reviewer = get_or_create_user(db, review.get("user"))
+            github_review_id = review.get("id")
+            existing = None
+            if github_review_id is not None:
+                existing = (
+                    db.query(ReviewEvent)
+                    .filter(
+                        ReviewEvent.pr_id == pull_request.id,
+                        ReviewEvent.github_review_id == github_review_id,
+                    )
+                    .first()
+                )
+            submitted_at = parse_utc_dt(review.get("submitted_at"))
+            if existing is None and github_review_id is None:
+                existing = (
+                    db.query(ReviewEvent)
+                    .filter(
+                        ReviewEvent.pr_id == pull_request.id,
+                        ReviewEvent.reviewer_id == (reviewer.id if reviewer else None),
+                        ReviewEvent.submitted_at == submitted_at,
+                    )
+                    .first()
+                )
+            if existing is None:
+                existing = ReviewEvent(
+                    github_review_id=github_review_id,
+                    pr_id=pull_request.id,
+                    reviewer_id=reviewer.id if reviewer else None,
+                    state=review.get("state", "COMMENTED"),
+                    body=review.get("body") or "",
+                    submitted_at=submitted_at,
+                )
+                db.add(existing)
+                synced_events += 1
+            else:
+                existing.reviewer_id = reviewer.id if reviewer else existing.reviewer_id
+                existing.state = review.get("state", existing.state)
+                existing.body = review.get("body") or existing.body
+                existing.submitted_at = submitted_at or existing.submitted_at
+        pull_request.reviews_synced_at = utc_now()
+        synced_prs += 1
+        db.flush()
+
+    db.commit()
+    return {
+        "prs_synced": synced_prs,
+        "events_upserted": synced_events,
+        "error": error,
+        "limit": max_prs,
     }
 
 
@@ -46,208 +325,182 @@ def root():
 def audit_repository(
     owner: str = Query(..., description="GitHub repository owner/organization"),
     repo: str = Query(..., description="GitHub repository name"),
-):
-    """
-    Analyzes review effort for closed pull requests in a GitHub repository:
-    1. Fetches the 30 most recently closed PRs.
-    2. Filters out unmerged PRs.
-    3. Calculates review effort (duration in hours from created_at to merged_at).
-    4. Categorizes PRs by size proxy (body character length).
-    5. Calculates median review times per size bucket.
-    6. Flags anomalies that exceed 1.5x of the group median with a mock 90% confidence interval.
-    """
-    github_url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
-    params = {"state": "closed", "per_page": 30}
-    headers = {
-        "Accept": "application/vnd.github.v3+json",
-        "User-Agent": "RevAudit-Academic-Prototype",
-    }
+    db: Session = Depends(get_db),
+    auth_context: Optional[AuthContext] = Depends(get_optional_auth),
+) -> Dict[str, Any]:
+    """Paginate PRs, sync review events, calculate workload, and analyze a repo."""
+    clean_owner = owner.strip()
+    clean_repo = repo.strip()
+    if not clean_owner or not clean_repo:
+        raise HTTPException(status_code=422, detail="owner and repo are required")
 
+    repo_obj = (
+        db.query(Repository)
+        .filter(
+            func.lower(Repository.owner) == clean_owner.lower(),
+            func.lower(Repository.name) == clean_repo.lower(),
+        )
+        .first()
+    )
+    if repo_obj is None:
+        repo_obj = Repository(owner=clean_owner, name=clean_repo)
+        db.add(repo_obj)
+        db.commit()
+        db.refresh(repo_obj)
+
+    client = GitHubClient(token=auth_context.access_token if auth_context else None)
+    had_last_sync = repo_obj.last_synced_at is not None
+    raw_prs = []
+    sync_error = None
     try:
-        response = requests.get(github_url, params=params, headers=headers, timeout=15)
-    except requests.RequestException as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Network error connecting to GitHub API: {str(e)}",
+        raw_prs = client.list_closed_pull_requests(
+            clean_owner,
+            clean_repo,
+            stop_before=repo_obj.last_synced_at.isoformat()
+            if repo_obj.last_synced_at
+            else None,
         )
+    except GitHubAPIError as exc:
+        sync_error = exc.message
+        if exc.status_code == 404:
+            raise HTTPException(status_code=404, detail=exc.message) from exc
 
-    if response.status_code == 404:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Repository '{owner}/{repo}' not found on GitHub. Please check owner and repository spelling.",
+    changed_prs: list[PullRequest] = []
+    new_prs_fetched = 0
+    for pr_data in raw_prs:
+        pr_number = pr_data.get("number")
+        if not pr_number:
+            continue
+        created_at = parse_utc_dt(pr_data.get("created_at")) or utc_now()
+        merged_at = parse_utc_dt(pr_data.get("merged_at"))
+        closed_at = parse_utc_dt(pr_data.get("closed_at"))
+        body_text = pr_data.get("body") or ""
+        author = get_or_create_user(db, pr_data.get("user"))
+        pull_request = (
+            db.query(PullRequest)
+            .filter(
+                PullRequest.repo_id == repo_obj.id,
+                PullRequest.pr_number == pr_number,
+            )
+            .first()
         )
-    elif response.status_code == 403:
-        raise HTTPException(
-            status_code=403,
-            detail="GitHub API rate limit exceeded. Please try again later or supply an authorization token.",
-        )
-    elif response.status_code != 200:
-        raise HTTPException(
-            status_code=response.status_code,
-            detail=f"GitHub API returned error: {response.text}",
-        )
+        if pull_request is None:
+            pull_request = PullRequest(
+                repo_id=repo_obj.id,
+                pr_number=pr_number,
+                title=pr_data.get("title", f"PR #{pr_number}"),
+                created_at=created_at,
+            )
+            db.add(pull_request)
+            new_prs_fetched += 1
 
-    prs_data = response.json()
-    if not isinstance(prs_data, list) or len(prs_data) == 0:
-        return {
-            "owner": owner,
-            "repo": repo,
-            "total_closed_prs": 0,
-            "merged_prs_count": 0,
-            "baseline_medians": {},
-            "anomalies": [],
-            "pull_requests": [],
-            "message": "No closed pull requests found for this repository.",
-        }
-
-    # Step 3: Convert JSON to Pandas DataFrame
-    df = pd.DataFrame(prs_data)
-
-    # Step 4: Data cleaning - drop PRs that were closed but never merged (missing data imputation)
-    # Merged PRs have a non-null 'merged_at' timestamp
-    if "merged_at" not in df.columns:
-        return {
-            "owner": owner,
-            "repo": repo,
-            "total_closed_prs": len(df),
-            "merged_prs_count": 0,
-            "baseline_medians": {},
-            "anomalies": [],
-            "pull_requests": [],
-            "message": "No merged pull requests found in the recent closed PR history.",
-        }
-
-    merged_df = df[df["merged_at"].notna()].copy()
-
-    if merged_df.empty:
-        return {
-            "owner": owner,
-            "repo": repo,
-            "total_closed_prs": len(df),
-            "merged_prs_count": 0,
-            "baseline_medians": {},
-            "anomalies": [],
-            "pull_requests": [],
-            "message": "All fetched closed PRs were closed without merging.",
-        }
-
-    # Step 5: Calculate review effort (hours between created_at and merged_at)
-    merged_df["created_dt"] = pd.to_datetime(merged_df["created_at"])
-    merged_df["merged_dt"] = pd.to_datetime(merged_df["merged_at"])
-    merged_df["review_time_hours"] = (
-        merged_df["merged_dt"] - merged_df["created_dt"]
-    ).dt.total_seconds() / 3600.0
-
-    # Round review_time_hours for clean reporting
-    merged_df["review_time_hours"] = merged_df["review_time_hours"].round(2)
-
-    # Step 6: PR Size proxy using body character length
-    merged_df["body_length"] = merged_df["body"].fillna("").astype(str).str.len()
-    merged_df["size_category"] = merged_df["body_length"].apply(categorize_pr_size)
-
-    # Extract author username safely
-    merged_df["author"] = merged_df["user"].apply(
-        lambda u: u.get("login", "unknown") if isinstance(u, dict) else "unknown"
-    )
-
-    # Step 7: Calculate median review time for each group
-    group_stats = (
-        merged_df.groupby("size_category")["review_time_hours"]
-        .agg(["median", "count", "std"])
-        .reset_index()
-    )
-
-    # Build baseline medians dictionary with mock 90% confidence intervals
-    baseline_medians: Dict[str, Dict[str, Any]] = {}
-    median_lookup: Dict[str, float] = {}
-
-    for _, row in group_stats.iterrows():
-        cat = str(row["size_category"])
-        med = float(row["median"]) if pd.notna(row["median"]) else 0.0
-        cnt = int(row["count"])
-        std = float(row["std"]) if pd.notna(row["std"]) else 0.0
-
-        # Mock 90% Confidence Interval around the group baseline
-        # Formula: median +/- 1.645 * (std / sqrt(n)) when std > 0, else +/- 15% range
-        if cnt > 1 and std > 0:
-            margin = 1.645 * (std / math.sqrt(cnt))
+        pull_request.title = pr_data.get("title", pull_request.title)
+        pull_request.author_id = author.id if author else pull_request.author_id
+        pull_request.state = pr_data.get("state", pull_request.state or "closed")
+        pull_request.body = body_text
+        pull_request.body_length = len(body_text)
+        pull_request.size_category = categorize_pr_size(len(body_text))
+        pull_request.additions = int(pr_data.get("additions") or 0)
+        pull_request.deletions = int(pr_data.get("deletions") or 0)
+        pull_request.changed_files = int(pr_data.get("changed_files") or 0)
+        pull_request.html_url = pr_data.get("html_url")
+        pull_request.created_at = created_at
+        pull_request.closed_at = closed_at
+        pull_request.merged_at = merged_at
+        if merged_at and created_at:
+            pull_request.review_time_hours = round(
+                max(0.0, (merged_at - created_at).total_seconds() / 3600.0), 2
+            )
         else:
-            margin = med * 0.15
+            pull_request.review_time_hours = None
+        if pull_request.merged_at is not None:
+            # The PR appeared in the delta, so its review list may have changed.
+            pull_request.reviews_synced_at = None
+        changed_prs.append(pull_request)
 
-        ci_lower = max(0.0, round(med - margin, 2))
-        ci_upper = round(med + margin, 2)
+    db.flush()
+    all_repo_prs = (
+        db.query(PullRequest)
+        .filter(PullRequest.repo_id == repo_obj.id)
+        .all()
+    )
 
-        baseline_medians[cat] = {
-            "median_hours": round(med, 2),
-            "sample_size": cnt,
-            "mock_ci_90": [ci_lower, ci_upper],
-        }
-        median_lookup[cat] = med
+    review_targets: list[PullRequest] = []
+    seen_ids = set()
+    for pull_request in [*changed_prs, *all_repo_prs]:
+        if (
+            pull_request.id not in seen_ids
+            and pull_request.merged_at is not None
+            and pull_request.reviews_synced_at is None
+        ):
+            review_targets.append(pull_request)
+            seen_ids.add(pull_request.id)
 
-    # Flag anomalies: review_time > 1.5 * group median
-    anomalies: List[Dict[str, Any]] = []
+    review_sync = (
+        sync_reviews(db, client, clean_owner, clean_repo, review_targets)
+        if not sync_error
+        else {"prs_synced": 0, "events_upserted": 0, "error": None, "limit": 0}
+    )
 
-    for _, pr in merged_df.iterrows():
-        cat = pr["size_category"]
-        med = median_lookup.get(cat, 0.0)
-        review_hours = float(pr["review_time_hours"])
-        threshold = 1.5 * med
+    if not sync_error:
+        repo_obj.last_synced_at = utc_now()
+        db.commit()
+    all_repo_prs = (
+        db.query(PullRequest)
+        .filter(PullRequest.repo_id == repo_obj.id)
+        .all()
+    )
 
-        if review_hours > threshold:
-            ci_data = baseline_medians.get(cat, {}).get("mock_ci_90", [0.0, 0.0])
-            anomalies.append({
-                "pr_number": int(pr["number"]),
-                "title": str(pr.get("title", f"PR #{pr['number']}")),
-                "author": str(pr["author"]),
-                "size_category": cat,
-                "body_length": int(pr["body_length"]),
-                "review_time_hours": review_hours,
-                "group_median_hours": round(med, 2),
-                "anomaly_ratio": round(review_hours / max(med, 0.01), 2),
-                "threshold_hours": round(threshold, 2),
-                "mock_ci_90": ci_data,
-                "html_url": str(pr.get("html_url", "")),
-                "created_at": str(pr["created_at"]),
-                "merged_at": str(pr["merged_at"]),
-            })
+    if not all_repo_prs and sync_error:
+        raise HTTPException(status_code=502, detail=sync_error)
 
-    # Sort anomalies by anomaly ratio descending
-    anomalies.sort(key=lambda x: x["anomaly_ratio"], reverse=True)
-
-    # Provide the full merged sample so contributors can see their own PR history,
-    # not only the records that were flagged as anomalies.
-    pull_requests: List[Dict[str, Any]] = []
-    for _, pr in merged_df.iterrows():
-        category = str(pr["size_category"])
-        median = median_lookup.get(category, 0.0)
-        review_hours = float(pr["review_time_hours"])
-        pull_requests.append({
-            "pr_number": int(pr["number"]),
-            "title": str(pr.get("title", f"PR #{pr['number']}")),
-            "author": str(pr["author"]),
-            "size_category": category,
-            "body_length": int(pr["body_length"]),
-            "turnaround_hours": review_hours,
-            "group_median_hours": round(median, 2),
-            "anomaly_ratio": round(review_hours / max(median, 0.01), 2),
-            "is_anomaly": review_hours > 1.5 * median,
-            "html_url": str(pr.get("html_url", "")),
-            "created_at": str(pr["created_at"]),
-            "merged_at": str(pr["merged_at"]),
-        })
-
-    # Step 8: Return structured JSON payload
+    analysis = analyze_pull_requests(all_repo_prs, db)
     return {
-        "owner": owner,
-        "repo": repo,
-        "total_closed_prs": len(df),
-        "merged_prs_count": len(merged_df),
-        "unmerged_prs_dropped": len(df) - len(merged_df),
-        "baseline_medians": baseline_medians,
-        "anomalies_count": len(anomalies),
-        "anomalies": anomalies,
-        "pull_requests": pull_requests,
+        "owner": repo_obj.owner,
+        "repo": repo_obj.name,
+        "total_closed_prs": len(all_repo_prs),
+        "merged_prs_count": len(analysis["merged_prs"]),
+        "unmerged_prs_dropped": len(all_repo_prs) - len(analysis["merged_prs"]),
+        "baseline_medians": analysis["baseline_medians"],
+        "anomalies_count": len(analysis["anomalies"]),
+        "anomalies": analysis["anomalies"],
+        "pull_requests": analysis["merged_prs"],
+        "workload_summary": analysis["workload_summary"],
+        "data_source": "neon_database" if sync_error else "github_paginated_sync",
+        "new_prs_fetched": new_prs_fetched,
+        "last_synced_at": repo_obj.last_synced_at.isoformat()
+        if repo_obj.last_synced_at
+        else None,
+        "pagination": {
+            "enabled": True,
+            "max_pages": client.max_pages,
+            "stop_at_last_sync": had_last_sync,
+        },
+        "review_sync": review_sync,
+        "sync_error": sync_error,
     }
+
+
+@app.post("/api/reports/pdf")
+def export_audit_pdf(payload: Dict[str, Any] = Body(...)) -> Response:
+    owner = str(payload.get("owner", "repository")).strip() or "repository"
+    repo = str(payload.get("repo", "audit")).strip() or "audit"
+    try:
+        pdf_bytes = build_audit_pdf(payload)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    safe_filename = "".join(
+        character if character.isalnum() or character in "-_" else "_"
+        for character in f"RevAudit_{owner}_{repo}"
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_filename}.pdf"'
+        },
+    )
 
 
 if __name__ == "__main__":
