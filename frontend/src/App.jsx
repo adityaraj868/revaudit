@@ -208,8 +208,9 @@ export default function App() {
   const parsedActiveRepo = parseRepo(currentRepo) || { owner: 'fastapi', repo: 'fastapi' };
   const anomaliesCount = auditData?.anomalies_count || auditData?.anomalies?.length || 0;
   const mergedCount = auditData?.merged_prs_count || 0;
-  const totalClosed = auditData?.total_closed_prs || 0;
-  const droppedCount = auditData?.unmerged_prs_dropped || 0;
+  const sampleCount = auditData?.total_prs_in_sample ?? mergedCount;
+  const firstReviewCount = auditData?.first_review_observed_count ?? mergedCount;
+  const censoredCount = auditData?.first_review_censored_count ?? 0;
   const baselineMedians = auditData?.baseline_medians || {};
   const anomalies = auditData?.anomalies || [];
   const workloadSummary = auditData?.workload_summary || {};
@@ -217,11 +218,6 @@ export default function App() {
     ? new URLSearchParams(window.location.search).get('auth_error')
     : null;
   const displayError = error || (authError ? `GitHub sign-in failed: ${authError}` : null);
-
-  // Review health calculation
-  const reviewHealthPct = mergedCount > 0 
-    ? Math.round(((mergedCount - anomaliesCount) / mergedCount) * 100) 
-    : 100;
 
   // =========================================================================
   // 1. PRODUCT LANDING PAGE VIEW
@@ -299,11 +295,11 @@ export default function App() {
               {/* Page Title & Repo Metadata */}
               <PageHeader
                 title={`Reviewer Dashboard: ${currentRepo}`}
-                subtitle="Repository-wide review effort, turnaround consistency, and size-controlled anomaly analysis."
+                subtitle="Repository review queue latency, censored open work, and adjusted process triage signals."
                 badges={[
                   { label: 'GitHub REST API v3', color: 'bg-slate-800 text-slate-300 border-slate-700' },
                   { label: 'Non-Parametric Medians', color: 'bg-slate-800 text-slate-300 border-slate-700' },
-                  { label: 'Survival Bias Filtered', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' }
+                  { label: 'Censored PRs Included', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' }
                 ]}
                 actions={
                   <div className="flex items-center space-x-2">
@@ -342,36 +338,53 @@ export default function App() {
               {/* Main Analytical Dashboard Content */}
               {auditData && (
                 <div className="space-y-6 animate-fade-in">
+                  <section className="rounded-lg border border-slate-800 bg-slate-900/70 px-4 py-3 text-xs text-slate-400">
+                    {auditData.metadata?.analysis_version !== '2.0.0' && (
+                      <p className="mb-2 text-amber-300">Legacy or sample audit data is displayed. It does not include event-based first-review timing, censoring, or the adjusted model.</p>
+                    )}
+                    <div className="flex flex-wrap gap-x-5 gap-y-1">
+                      <span>Sample: {auditData.metadata?.sample_window_start ? new Date(auditData.metadata.sample_window_start).toLocaleDateString() : 'unknown'} – {auditData.metadata?.sample_window_end ? new Date(auditData.metadata.sample_window_end).toLocaleDateString() : 'unknown'}</span>
+                      <span>As of: {auditData.metadata?.as_of ? new Date(auditData.metadata.as_of).toLocaleString() : 'unknown'}</span>
+                      <span>Timeline coverage: {auditData.data_quality?.timeline_coverage_pct ?? '—'}%</span>
+                      <span>{auditData.metadata?.github_authenticated ? 'Authenticated GitHub API' : 'Unauthenticated GitHub API'}</span>
+                    </div>
+                    {auditData.data_quality?.warnings?.length > 0 && (
+                      <ul className="mt-2 list-disc pl-4 text-amber-300/90">
+                        {auditData.data_quality.warnings.slice(0, 3).map((warning, index) => <li key={index}>{warning}</li>)}
+                      </ul>
+                    )}
+                  </section>
                   
                   {/* High Density Metric Cards Grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                     <MetricCard
-                      label="Evaluated Merged PRs"
-                      value={mergedCount}
-                      unit={`/ ${totalClosed} closed`}
-                      subtext={`${droppedCount} unmerged branches discarded`}
+                      label="PRs in sample"
+                      value={sampleCount}
+                      unit={`${auditData?.open_prs_count || 0} open`}
+                      subtext={`${mergedCount} merged · ${auditData?.unmerged_closed_prs_count || 0} closed unmerged`}
                       status="neutral"
                       icon={GitPullRequest}
-                      footnote="Survival filter"
+                      footnote="Paginated recent sample"
                     />
 
                     <MetricCard
                       label="Flagged Anomalies"
                       value={anomaliesCount}
                       unit={`PR${anomaliesCount === 1 ? '' : 's'}`}
-                      subtext={anomaliesCount > 0 ? 'Exceeded > 1.5x group median' : 'Within normal baselines'}
+                      subtext={anomaliesCount > 0 ? 'Adjusted residual triage signals' : 'No adjusted outliers detected'}
                       status={anomaliesCount > 0 ? 'warning' : 'success'}
                       icon={AlertTriangle}
-                      footnote="> 1.5x median"
+                      footnote="|robust z| ≥ 2.5"
                     />
 
                     <MetricCard
-                      label="Review Consistency"
-                      value={`${reviewHealthPct}%`}
-                      subtext="Conforming to size baseline"
-                      status={reviewHealthPct >= 80 ? 'success' : 'warning'}
+                      label="First reviews observed"
+                      value={firstReviewCount}
+                      unit={`${censoredCount} censored`}
+                      subtext="Right-censored PRs remain in latency estimates"
+                      status="neutral"
                       icon={CheckCircle2}
-                      footnote="Process bounds"
+                      footnote="Queue latency"
                     />
 
                     <MetricCard
@@ -394,6 +407,20 @@ export default function App() {
                       footnote="First-review snapshot"
                     />
                   </div>
+
+                  <section className="grid grid-cols-1 sm:grid-cols-3 gap-3" aria-label="Review lifecycle stage medians">
+                    {[
+                      ['Request to first review', auditData.stage_metrics?.request_to_first_review],
+                      ['Author response after review', auditData.stage_metrics?.author_response_after_first_review],
+                      ['Approval to merge', auditData.stage_metrics?.approval_to_merge],
+                    ].map(([label, stage]) => (
+                      <div key={label} className="rounded-lg border border-slate-800 bg-slate-900 p-3">
+                        <div className="text-xs text-slate-400">{label}</div>
+                        <div className="mt-1 font-mono text-lg text-slate-100">{stage?.median_hours == null ? '—' : `${stage.median_hours.toFixed(1)}h`}</div>
+                        <div className="text-[11px] text-slate-500">n = {stage?.sample_size || 0}{stage?.measurement_note ? ' · comment proxy' : ''}</div>
+                      </div>
+                    ))}
+                  </section>
 
                   {/* Size-Controlled Review Baselines Breakdown */}
                   <CohortBaselines baselineMedians={baselineMedians} />

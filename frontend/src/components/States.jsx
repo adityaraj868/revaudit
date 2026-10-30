@@ -13,13 +13,13 @@ export function LoadingState({ repo = '' }) {
           Executing Statistical Audit for {repo || 'Repository'}
         </h3>
         <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed font-sans">
-          Querying recent closed pull requests from GitHub REST API v3, filtering unmerged branches, computing size-controlled medians, and calculating 90% confidence intervals...
+          Paginating recent open and closed pull requests, loading review events and change statistics, then estimating first-review latency with censoring...
         </p>
       </div>
 
       <div className="inline-flex items-center space-x-2 text-[11px] font-mono text-orange-400/90 bg-orange-950/30 px-3 py-1 rounded-full border border-orange-800/30">
         <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-ping"></span>
-        <span>Survival Imputation • Stratification • 1.5x Anomaly Filter</span>
+        <span>Right Censoring • Code Scope • Robust Process Triage</span>
       </div>
     </div>
   );
@@ -69,7 +69,7 @@ export function EmptyAuditState({ onSampleClick }) {
           Ready to Audit GitHub Repository
         </h3>
         <p className="text-xs text-slate-400 max-w-sm mx-auto font-sans leading-relaxed">
-          Enter any public GitHub repository URL or slug to calculate size-controlled turnaround baselines and detect review anomalies.
+          Enter any public GitHub repository URL or slug to estimate first-review queue latency and surface process triage signals.
         </p>
       </div>
 

@@ -244,7 +244,7 @@ export default function PresentationDeck({ onNavigateToAudit }) {
                         <strong className="text-white">{c.median}</strong>
                       </div>
                       <div className="flex justify-between text-slate-400 text-[11px]">
-                        <span>90% CI:</span>
+                        <span>95% bootstrap CI:</span>
                         <span>{c.ci}</span>
                       </div>
                       <div className="flex justify-between text-amber-400 text-[11px]">

@@ -18,7 +18,7 @@ export default function AnomalyTable({
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCohort, setSelectedCohort] = useState('ALL');
-  const [sortField, setSortField] = useState('anomaly_ratio');
+  const [sortField, setSortField] = useState('standardized_residual');
   const [sortOrder, setSortOrder] = useState('desc');
   const [selectedAnomaly, setSelectedAnomaly] = useState(null);
 
@@ -85,9 +85,10 @@ export default function AnomalyTable({
             className="bg-slate-950 border border-slate-800 text-slate-300 px-2 py-1.5 rounded-md text-xs font-sans focus:outline-none focus:border-slate-600"
           >
             <option value="ALL">All Cohorts</option>
-            <option value="Small">Small (&lt;250c)</option>
-            <option value="Medium">Medium (250-1000c)</option>
-            <option value="Large">Large (&gt;1000c)</option>
+            <option value="Small">Small (≤100 lines, ≤5 files)</option>
+            <option value="Medium">Medium (≤1,000 lines, ≤20 files)</option>
+            <option value="Large">Large</option>
+            <option value="Unknown">Unknown scope</option>
           </select>
         </div>
       </div>
@@ -103,7 +104,7 @@ export default function AnomalyTable({
             </h4>
             <p className="text-xs text-slate-400 max-w-sm mx-auto">
               {anomalies.length === 0
-                ? 'All evaluated merged pull requests in this sample fell within expected size baseline boundaries (<= 1.5x median).'
+                ? 'No pull requests crossed the adjusted robust residual threshold in this sample.'
                 : 'Try adjusting your search query or cohort filter above.'}
             </p>
           </div>
@@ -144,24 +145,24 @@ export default function AnomalyTable({
                     className="py-2.5 px-3.5 font-medium text-right cursor-pointer hover:text-white transition-colors"
                   >
                     <div className="flex items-center justify-end space-x-1">
-                      <span>Observed (Δt)</span>
+                      <span>First review</span>
                       <ArrowUpDown className="w-3 h-3 text-slate-500" />
                     </div>
                   </th>
                   <th className="py-2.5 px-3.5 font-medium text-right">
-                    Cohort Median (x̃)
+                    Model expected
                   </th>
                   <th 
-                    onClick={() => handleSort('anomaly_ratio')}
+                    onClick={() => handleSort('standardized_residual')}
                     className="py-2.5 px-3.5 font-medium text-right cursor-pointer hover:text-white transition-colors"
                   >
                     <div className="flex items-center justify-end space-x-1">
-                      <span>Deviation</span>
+                      <span>Robust z</span>
                       <ArrowUpDown className="w-3 h-3 text-slate-500" />
                     </div>
                   </th>
                   <th className="py-2.5 px-3.5 font-medium">
-                    90% CI Baseline
+                    Direction
                   </th>
                   <th className="py-2.5 px-3.5 font-medium text-right">
                     Action
@@ -172,9 +173,8 @@ export default function AnomalyTable({
               <tbody className="divide-y divide-slate-800/60">
                 {sorted.map((item) => {
                   const isBot = (item.author || '').includes('[bot]') || (item.author || '').toLowerCase().includes('bot');
-                  const ratio = item.anomaly_ratio || 0;
-                  const ratioColor = ratio >= 4.0 ? 'text-rose-400 font-semibold' : 'text-amber-400 font-medium';
-                  const ci = item.mock_ci_90 || [0, 0];
+                  const ratio = item.standardized_residual || 0;
+                  const ratioColor = 'text-amber-400 font-medium';
 
                   return (
                     <tr 
@@ -212,19 +212,19 @@ export default function AnomalyTable({
                       </td>
 
                       <td className="py-2.5 px-3.5 text-right font-mono text-slate-100 tabular-nums">
-                        {item.review_time_hours.toFixed(2)}h
+                        {item.review_time_hours?.toFixed(2) ?? '—'}h
                       </td>
 
                       <td className="py-2.5 px-3.5 text-right font-mono text-slate-400 tabular-nums">
-                        {item.group_median_hours.toFixed(2)}h
+                        {item.expected_first_review_hours?.toFixed(2) ?? '—'}h
                       </td>
 
                       <td className={`py-2.5 px-3.5 text-right font-mono tabular-nums ${ratioColor}`}>
-                        +{ratio.toFixed(2)}x
+                        {ratio > 0 ? '+' : ''}{ratio.toFixed(2)}
                       </td>
 
                       <td className="py-2.5 px-3.5 font-mono text-slate-400 tabular-nums text-xs">
-                        [{ci[0].toFixed(2)}h – {ci[1].toFixed(2)}h]
+                        {item.anomaly_direction?.replaceAll('_', ' ')}
                       </td>
 
                       <td className="py-2.5 px-3.5 text-right">

@@ -6,6 +6,8 @@ import { ErrorState, LoadingState } from './States';
 const EMPTY_PULL_REQUESTS = [];
 
 const formatDuration = (hours) => {
+  if (hours == null || !Number.isFinite(Number(hours))) return 'Waiting / unavailable';
+  hours = Number(hours);
   if (hours >= 48) return `${(hours / 24).toFixed(1)} days`;
   return `${hours.toFixed(1)} hours`;
 };
@@ -34,19 +36,19 @@ export default function ContributorDashboard({ auditData, currentRepo, loading, 
   if (loading) return <LoadingState repo={currentRepo} />;
   if (error) return <ErrorState error={error} onRetry={onRefresh} />;
 
-  const turnaroundValues = contributorPRs.map((pr) => Number(pr.turnaround_hours ?? pr.review_time_hours ?? 0));
+  const turnaroundValues = contributorPRs.filter((pr) => pr.first_review_latency_hours != null).map((pr) => Number(pr.first_review_latency_hours));
   const medianTurnaround = medianOf(turnaroundValues);
-  const flaggedCount = contributorPRs.filter((pr) => pr.is_anomaly ?? true).length;
+  const flaggedCount = contributorPRs.filter((pr) => pr.is_anomaly).length;
   const matchingFullSample = allPullRequests.filter((pr) => (pr.author || '').toLowerCase() === username.trim().replace(/^@/, '').toLowerCase()).length;
 
   return (
     <div className="space-y-6 font-sans">
       <PageHeader
         title={`Contributor Dashboard${username.trim() ? `: @${username.trim().replace(/^@/, '')}` : ''}`}
-        subtitle={`A personal view of merged PR turnaround in ${currentRepo || 'the selected repository'}.`}
+        subtitle={`A personal view of first-review queue latency in ${currentRepo || 'the selected repository'}.`}
         badges={[
           { label: 'Contributor View', color: 'bg-slate-800 text-slate-300 border-slate-700' },
-          { label: 'Merged PR sample', color: 'bg-slate-800 text-slate-300 border-slate-700' },
+          { label: 'Open and closed PR sample', color: 'bg-slate-800 text-slate-300 border-slate-700' },
         ]}
         actions={onRefresh && (
           <button onClick={onRefresh} className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700">
@@ -74,7 +76,7 @@ export default function ContributorDashboard({ auditData, currentRepo, loading, 
 
       {isPartialSample && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-200">
-          This API response does not include the full merged PR sample, so only available flagged records can be searched. The backend needs to return its <code>pull_requests</code> list for a complete contributor breakdown.
+          This API response does not include the sampled pull request records, so contributor history is incomplete.
         </div>
       )}
 
@@ -82,26 +84,26 @@ export default function ContributorDashboard({ auditData, currentRepo, loading, 
         <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/50 px-5 py-10 text-center">
           <UserRound className="mx-auto mb-3 h-8 w-8 text-slate-500" />
           <h2 className="text-base font-semibold text-slate-200">Look up your contribution history</h2>
-          <p className="mt-1 text-sm text-slate-400">Enter your GitHub username to see merged PRs and their review turnaround.</p>
+          <p className="mt-1 text-sm text-slate-400">Enter your GitHub username to see pull requests and their first-review latency.</p>
         </div>
       ) : contributorPRs.length === 0 ? (
         <div className="rounded-xl border border-slate-800 bg-slate-900 px-5 py-10 text-center">
           <GitPullRequest className="mx-auto mb-3 h-8 w-8 text-slate-500" />
-          <h2 className="text-base font-semibold text-slate-200">No merged PRs found for @{username.trim().replace(/^@/, '')}</h2>
-          <p className="mt-1 text-sm text-slate-400">This audit covers up to the 30 most recently closed PRs. Check the spelling or choose another repository.</p>
+          <h2 className="text-base font-semibold text-slate-200">No sampled PRs found for @{username.trim().replace(/^@/, '')}</h2>
+          <p className="mt-1 text-sm text-slate-400">Check the spelling or choose another repository.</p>
         </div>
       ) : (
         <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <SummaryCard icon={GitPullRequest} label="Merged PRs in sample" value={contributorPRs.length} hint={isPartialSample ? 'Flagged demo records only' : 'Recent repository sample'} />
-            <SummaryCard icon={Clock3} label="Median turnaround" value={formatDuration(medianTurnaround)} hint="Created to merged" />
-            <SummaryCard icon={AlertTriangle} label="Above cohort threshold" value={`${flaggedCount} / ${contributorPRs.length}`} hint="More than 1.5× cohort median" tone={flaggedCount ? 'amber' : 'emerald'} />
+            <SummaryCard icon={GitPullRequest} label="PRs in sample" value={contributorPRs.length} hint={isPartialSample ? 'Partial sample' : 'Recent repository sample'} />
+            <SummaryCard icon={Clock3} label="Median first-review latency" value={formatDuration(turnaroundValues.length ? medianTurnaround : null)} hint="Time to first human review" />
+            <SummaryCard icon={AlertTriangle} label="Triage signals" value={`${flaggedCount} / ${contributorPRs.length}`} hint="Adjusted process residuals" tone={flaggedCount ? 'amber' : 'emerald'} />
           </div>
 
           <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
             <div className="border-b border-slate-800 px-4 py-3">
               <h2 className="text-sm font-semibold text-white">Your pull requests</h2>
-              <p className="mt-1 text-xs text-slate-400">Turnaround is measured from PR creation to merge and compared with similar description-length cohorts.</p>
+              <p className="mt-1 text-xs text-slate-400">Open PRs without a first review are right-censored at audit time. Signals describe process patterns, not contributor performance.</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-left text-xs">
@@ -109,16 +111,16 @@ export default function ContributorDashboard({ auditData, currentRepo, loading, 
                   <tr>
                     <th className="px-4 py-3 font-medium">Pull request</th>
                     <th className="px-4 py-3 font-medium">Size cohort</th>
-                    <th className="px-4 py-3 text-right font-medium">Turnaround</th>
-                    <th className="px-4 py-3 text-right font-medium">Cohort median</th>
+                    <th className="px-4 py-3 text-right font-medium">First review latency</th>
+                    <th className="px-4 py-3 text-right font-medium">Model expected</th>
                     <th className="px-4 py-3 font-medium">Comparison</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/70">
                   {contributorPRs.map((pr) => {
-                    const hours = Number(pr.turnaround_hours ?? pr.review_time_hours ?? 0);
-                    const median = Number(pr.group_median_hours || 0);
-                    const flagged = Boolean(pr.is_anomaly ?? (hours > 1.5 * median));
+                    const hours = pr.first_review_latency_hours;
+                    const median = pr.expected_first_review_hours;
+                    const flagged = Boolean(pr.is_anomaly);
                     return (
                       <tr key={pr.pr_number} className="hover:bg-slate-800/30">
                         <td className="px-4 py-3">
@@ -126,14 +128,14 @@ export default function ContributorDashboard({ auditData, currentRepo, loading, 
                             <span className="truncate">#{pr.pr_number} {pr.title}</span>
                             <ArrowUpRight className="h-3 w-3 shrink-0" />
                           </a>
-                          <span className="mt-1 block text-[11px] text-slate-500">Merged {new Date(pr.merged_at).toLocaleDateString()}</span>
+                          <span className="mt-1 block text-[11px] text-slate-500">{pr.state} · {pr.censoring_status?.replaceAll('_', ' ')}</span>
                         </td>
                         <td className="px-4 py-3 text-slate-300">{pr.size_category}</td>
                         <td className="px-4 py-3 text-right font-mono text-slate-200">{formatDuration(hours)}</td>
                         <td className="px-4 py-3 text-right font-mono text-slate-400">{formatDuration(median)}</td>
                         <td className="px-4 py-3">
                           <span className={`rounded-full border px-2 py-1 text-[11px] ${flagged ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>
-                            {flagged ? 'Longer than cohort norm' : 'Within cohort range'}
+                            {flagged ? `${pr.anomaly_direction?.replaceAll('_', ' ')} (triage)` : pr.first_review_observed ? 'No adjusted signal' : 'Censored / awaiting review'}
                           </span>
                         </td>
                       </tr>

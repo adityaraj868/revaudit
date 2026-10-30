@@ -21,13 +21,13 @@ export default function MethodologyView() {
     {
       step: 1,
       name: 'Ingestion & Triage',
-      title: '1. Paginated GitHub REST API Ingestion',
-      subtitle: 'Bounded historical PR and review-event retrieval',
+      title: '1. Live, Paginated GitHub REST API Ingestion',
+      subtitle: 'Paginated sample of recent open and closed pull requests',
       icon: GitPullRequest,
       content: (
         <div className="space-y-3 font-sans text-xs text-slate-300 leading-relaxed">
           <p>
-            RevAudit queries GitHub's REST API v3 (<code className="text-blue-300 font-mono">/repos/&#123;owner&#125;/&#123;repo&#125;/pulls?state=closed&amp;per_page=100</code>) and follows Link headers until the configured page limit or the last sync timestamp. Merged PRs then load their review events for workload analysis.
+            RevAudit queries GitHub's REST API with <code className="text-blue-300 font-mono">state=all</code>, follows Link-header pagination, and enriches sampled pull requests with change statistics and review timeline events. Authenticated users can analyze private repositories and receive a larger rate-limit budget; the sample window and audit timestamp are returned with the results.
           </p>
           <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 font-mono text-[11px] space-y-1">
             <span className="text-blue-400 font-semibold block">// API Client Parameter Spec</span>
@@ -41,22 +41,22 @@ export default function MethodologyView() {
     },
     {
       step: 2,
-      name: 'Survival Correction',
-      title: '2. Survival Bias Correction (Imputation)',
-      subtitle: 'Discarding unmerged PRs to isolate completed review lifecycles',
+      name: 'Censoring',
+      title: '2. Include Open and Unmerged PRs',
+      subtitle: 'Right-censor PRs without a first review',
       icon: Filter,
       content: (
         <div className="space-y-3 font-sans text-xs text-slate-300 leading-relaxed">
           <p>
-            Pull requests that are closed without being merged represent rejected proposals, duplicate work, or abandoned experiments. Incorporating their turnaround times skews true code review latency baselines.
+            Open pull requests without a first human review are censored at audit time; closed unmerged PRs are censored at closure. Both remain in Kaplan–Meier latency estimates instead of being discarded or treated as completed review events.
           </p>
           <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 font-mono text-[11px] space-y-1.5">
             <span className="text-emerald-400 font-semibold block">Mathematical Invariant:</span>
             <div className="text-slate-200">
-              $$\mathcal&#123;D&#125;_\&#123;\text&#123;merged&#125;\&#125; = \&#123; \text&#123;PR&#125;_i \in \mathcal&#123;D&#125;_\&#123;\text&#123;raw&#125;\&#125; \mid \text&#123;merged\_at&#125;_i \neq \text&#123;null&#125; \&#125;$$
+              Event = first non-bot human review; otherwise observation is right-censored.
             </div>
             <div className="text-slate-400 text-[10px]">
-              Review duration Δt_i = (Timestamp(merged_at_i) - Timestamp(created_at_i)) / 3600 seconds.
+              The primary outcome is elapsed time from review eligibility to first human review.
             </div>
           </div>
         </div>
@@ -66,27 +66,27 @@ export default function MethodologyView() {
       step: 3,
       name: 'Size Cohorts',
       title: '3. PR Complexity Stratification',
-      subtitle: 'Controlling for review scope using description length proxy',
+      subtitle: 'Coarse scope controls using changed lines and files',
       icon: Layers,
       content: (
         <div className="space-y-3 font-sans text-xs text-slate-300 leading-relaxed">
           <p>
-            Because summary REST API lists omit file line diffs without per-PR queries, description character length (<code className="text-blue-300 font-mono">L_body</code>) provides an effective proxy for architectural scope and review complexity:
+            Per-PR detail provides additions, deletions, and changed file counts. These coarse measures define scope cohorts; missing values are kept in an explicit Unknown cohort.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-[11px]">
             <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800">
               <span className="text-blue-400 font-semibold block">Small Cohort</span>
-              <span className="text-slate-400 text-[10px]">L_body &lt; 250 chars</span>
+              <span className="text-slate-400 text-[10px]">≤100 changed lines and ≤5 files</span>
               <p className="text-slate-300 text-[10px] mt-1 font-sans">Minor bugfixes, typos, documentation updates</p>
             </div>
             <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800">
               <span className="text-blue-400 font-semibold block">Medium Cohort</span>
-              <span className="text-slate-400 text-[10px]">250 ≤ L_body &lt; 1000</span>
+              <span className="text-slate-400 text-[10px]">≤1,000 lines and ≤20 files</span>
               <p className="text-slate-300 text-[10px] mt-1 font-sans">Standard feature updates, routine components</p>
             </div>
             <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800">
               <span className="text-blue-400 font-semibold block">Large Cohort</span>
-              <span className="text-slate-400 text-[10px]">L_body ≥ 1000 chars</span>
+              <span className="text-slate-400 text-[10px]">Above either medium cutoff</span>
               <p className="text-slate-300 text-[10px] mt-1 font-sans">Major subsystem refactors, database migrations</p>
             </div>
           </div>
@@ -95,21 +95,21 @@ export default function MethodologyView() {
     },
     {
       step: 4,
-      name: 'Medians & CI₉₀',
-      title: '4. Non-Parametric Median & 90% Confidence Intervals',
-      subtitle: '50% breakdown-point resistance against extreme outliers',
+      name: 'Kaplan–Meier & CI₉₅',
+      title: '4. Censoring-Aware Median & Bootstrap Interval',
+      subtitle: 'Non-parametric estimate with uncertainty when support permits',
       icon: Scale,
       content: (
         <div className="space-y-3 font-sans text-xs text-slate-300 leading-relaxed">
           <p>
-            Review duration distributions in software engineering are heavy-tailed and right-skewed. Arithmetic means (μ) are easily distorted by extreme PRs (e.g. PR open for 3 months). The median ($\tilde&#123;x&#125;_C$) guarantees 50% breakdown resistance:
+            Kaplan–Meier estimates the first-review latency distribution while retaining right-censored records. A percentile bootstrap 95% interval is shown only when cohort size and event support are sufficient; otherwise the interval is reported unavailable.
           </p>
           <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 font-mono text-[11px] space-y-1.5">
             <div className="text-blue-300">
               $$\tilde&#123;x&#125;_C = \text&#123;Median&#125;(\&#123; \Delta t_i \mid \text&#123;PR&#125;_i \in C \&#125;)$$
             </div>
             <div className="text-slate-300">
-              $$CI_&#123;90&#125;(C) = \left[ \max\left(0,\; \tilde&#123;x&#125;_C - 1.645 \cdot \frac&#123;s_C&#125;&#123;\sqrt&#123;n_C&#125;&#125;\right),\; \tilde&#123;x&#125;_C + 1.645 \cdot \frac&#123;s_C&#125;&#123;\sqrt&#123;n_C&#125;&#125; \right]$$
+              CI₉₅ = percentile bootstrap interval of the Kaplan–Meier median
             </div>
           </div>
         </div>
@@ -117,18 +117,18 @@ export default function MethodologyView() {
     },
     {
       step: 5,
-      name: '1.5x Anomaly Rule',
-      title: '5. 1.5× Anomaly Threshold Multiplier',
-      subtitle: 'Flagging review deviations relative to cohort-specific baselines',
+      name: 'Adjusted Triage',
+      title: '5. Robust Adjusted Process Signals',
+      subtitle: 'Compare observed latency with a robust conditional expectation',
       icon: AlertTriangle,
       content: (
         <div className="space-y-3 font-sans text-xs text-slate-300 leading-relaxed">
           <p>
-            An individual pull request $\text&#123;PR&#125;_i$ is flagged as an anomaly if its review duration exceeds 1.5× the median of its specific size cohort ($\tilde&#123;x&#125;_C$):
+            Huber robust regression models log first-review latency using change churn, changed files, first-time contributor status, and recent reviewer activity. Residuals with absolute robust z-score at least 2.5 are shown as triage signals in either direction. This model is unavailable below the stated minimum sample size.
           </p>
           <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 font-mono text-[11px] space-y-1.5">
             <div className="text-amber-300">
-              $$\text&#123;IsAnomaly&#125;(\text&#123;PR&#125;_i) = \begin&#123;cases&#125; \text&#123;True&#125; &amp; \text&#123;if &#125; \Delta t_i &gt; 1.5 \times \tilde&#123;x&#125;_C \\ \text&#123;False&#125; &amp; \text&#123;otherwise&#125; \end&#123;cases&#125;$$
+              Flag for process review when |robust residual z| ≥ 2.5
             </div>
             <div className="text-slate-400">
               $$\text&#123;Variance Ratio &#125; \mathcal&#123;R&#125;_i = \frac&#123;\Delta t_i&#125;&#123;\tilde&#123;x&#125;_C&#125;$$
@@ -184,8 +184,8 @@ export default function MethodologyView() {
         subtitle="The seven-stage ingestion, statistical, workload, access, and reporting pipeline"
         badges={[
           { label: 'Non-Parametric Medians', color: 'bg-slate-800 text-slate-300 border-slate-700' },
-          { label: '90% CI Bounds', color: 'bg-slate-800 text-slate-300 border-slate-700' },
-          { label: '1.5x Multiplier', color: 'bg-amber-500/10 text-amber-400 border-amber-500/30' }
+          { label: 'Bootstrap 95% CI', color: 'bg-slate-800 text-slate-300 border-slate-700' },
+          { label: 'Adjusted residual triage', color: 'bg-amber-500/10 text-amber-400 border-amber-500/30' }
         ]}
       />
 
@@ -197,7 +197,7 @@ export default function MethodologyView() {
             <span>Seven-Stage RevAudit Implementation Pipeline</span>
           </h3>
           <p className="text-xs text-slate-400 mt-1">
-            From raw GitHub JSON events to size-controlled anomaly classification with confidence bounds.
+            From paginated GitHub PRs to censoring-aware queue latency and adjusted process triage.
           </p>
         </div>
 

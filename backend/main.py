@@ -1,21 +1,19 @@
-from __future__ import annotations
-
-import os
-import secrets
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
-from urllib.parse import urlencode
+from threading import Lock
+from time import time
+from typing import Any, Dict, List, Optional, Tuple
+import os
+import re
 
 import requests
 from fastapi import Body, Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 
-from analytics import analyze_pull_requests, categorize_pr_size, parse_utc_dt
 from auth import (
     AuthContext,
     create_auth_session,
@@ -23,24 +21,21 @@ from auth import (
     revoke_auth_session,
 )
 from database import Base, ensure_schema, engine, get_db
-from github_client import GitHubAPIError, GitHubClient
-from models import PullRequest, Repository, ReviewEvent, User
+from models import User
 from reporting import build_audit_pdf
+from statistical_engine import build_pull_request_record, finalize_analysis
 
-
-# Initialize both fresh databases and existing prototype databases.
-Base.metadata.create_all(bind=engine)
-ensure_schema()
+API_VERSION = "2022-11-28"
+REQUEST_TIMEOUT_SECONDS = 20
+MAX_UNAUTHENTICATED_SAMPLE = 25
+CACHE_TTL_SECONDS = 300
+MAX_CACHED_AUDITS = 64
 
 app = FastAPI(
     title="RevAudit Engine",
-    description=(
-        "Analyzes GitHub PR review effort with paginated ingestion, reviewer "
-        "workload snapshots, and size-controlled anomaly detection."
-    ),
-    version="2.1.0",
+    description="Censoring-aware analysis of GitHub PR review queue latency and process patterns.",
+    version="2.0.0",
 )
-
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 allowed_origins = {
     frontend_url,
@@ -63,13 +58,159 @@ app.add_middleware(
     https_only=os.getenv("COOKIE_SECURE", "false").lower() == "true",
 )
 
+# Initialize new deployments and apply additive changes to existing databases.
+Base.metadata.create_all(bind=engine)
+ensure_schema()
 
-def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+_audit_cache: Dict[Tuple[str, str, int, bool], Tuple[float, Dict[str, Any]]] = {}
+_cache_lock = Lock()
 
 
-def get_or_create_user(db: Session, user_dict: Optional[Dict[str, Any]]) -> Optional[User]:
-    """Find a GitHub user by stable ID, then update its public profile fields."""
+class GitHubAPIError(Exception):
+    def __init__(self, status_code: int, detail: str, retry_after: Optional[str] = None):
+        super().__init__(detail)
+        self.status_code = status_code
+        self.detail = detail
+        self.retry_after = retry_after
+
+
+class GitHubClient:
+    def __init__(self, token: Optional[str]):
+        self.authenticated = bool(token)
+        self.headers = {
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": API_VERSION,
+            "User-Agent": "RevAudit-Statistical-Engine",
+        }
+        if token:
+            self.headers["Authorization"] = f"Bearer {token}"
+        self.rate_limit = {"remaining": None, "limit": None, "reset_at": None}
+
+    def get_json(self, url: str, params: Optional[Dict[str, Any]] = None) -> Tuple[Any, requests.Response]:
+        try:
+            response = requests.get(url, params=params, headers=self.headers, timeout=REQUEST_TIMEOUT_SECONDS)
+        except requests.RequestException as exc:
+            raise GitHubAPIError(502, f"Network error connecting to GitHub: {exc}")
+
+        self.rate_limit = {
+            "remaining": response.headers.get("X-RateLimit-Remaining"),
+            "limit": response.headers.get("X-RateLimit-Limit"),
+            "reset_at": response.headers.get("X-RateLimit-Reset"),
+        }
+        if response.status_code == 404:
+            raise GitHubAPIError(404, "Repository or requested pull request data was not found.")
+        if response.status_code in (403, 429):
+            remaining = response.headers.get("X-RateLimit-Remaining")
+            reset = response.headers.get("X-RateLimit-Reset")
+            if response.status_code == 429 or remaining == "0" or response.headers.get("Retry-After"):
+                detail = "GitHub API rate limit reached. Configure GITHUB_TOKEN to analyze a larger sample."
+                if reset:
+                    detail += f" Rate limit reset timestamp: {reset}."
+                raise GitHubAPIError(429, detail, response.headers.get("Retry-After"))
+            raise GitHubAPIError(403, "GitHub denied access to this repository or API resource.")
+        if response.status_code >= 400:
+            raise GitHubAPIError(response.status_code, f"GitHub API returned HTTP {response.status_code}.")
+        try:
+            return response.json(), response
+        except ValueError:
+            raise GitHubAPIError(502, "GitHub returned an invalid JSON response.")
+
+    def get_all_pages(self, url: str, params: Optional[Dict[str, Any]] = None, limit: Optional[int] = None) -> Tuple[List[Dict[str, Any]], int]:
+        output: List[Dict[str, Any]] = []
+        pages = 0
+        next_url: Optional[str] = url
+        next_params = params
+        while next_url and (limit is None or len(output) < limit):
+            rows, response = self.get_json(next_url, next_params)
+            pages += 1
+            if not isinstance(rows, list):
+                raise GitHubAPIError(502, "GitHub returned an unexpected response format.")
+            remaining = None if limit is None else max(0, limit - len(output))
+            output.extend(rows[:remaining] if remaining is not None else rows)
+            next_url = _next_link(response.headers.get("Link", ""))
+            next_params = None
+        return output, pages
+
+
+def _next_link(link_header: str) -> Optional[str]:
+    for part in link_header.split(","):
+        if 'rel="next"' in part:
+            match = re.search(r"<([^>]+)>", part)
+            return match.group(1) if match else None
+    return None
+
+
+def _fetch_pr_enrichment(client: GitHubClient, owner: str, repo: str, raw: Dict[str, Any]) -> Tuple[int, Optional[Dict[str, Any]], Optional[List[Dict[str, Any]]], List[str]]:
+    number = int(raw["number"])
+    base_url = f"https://api.github.com/repos/{owner}/{repo}"
+    warnings: List[str] = []
+    detail: Optional[Dict[str, Any]] = None
+    timeline: Optional[List[Dict[str, Any]]] = None
+    try:
+        detail, _ = client.get_json(f"{base_url}/pulls/{number}")
+    except GitHubAPIError as exc:
+        if exc.status_code == 429:
+            raise
+        warnings.append(f"PR #{number}: change-size details unavailable.")
+    try:
+        timeline, _ = client.get_all_pages(
+            f"{base_url}/issues/{number}/timeline",
+            params={"per_page": 100},
+        )
+    except GitHubAPIError as exc:
+        if exc.status_code == 429:
+            raise
+        warnings.append(f"PR #{number}: review timeline unavailable.")
+    return number, detail, timeline, warnings
+
+
+def _fetch_enrichments_batched(client: GitHubClient, owner: str, repo: str, prs: List[Dict[str, Any]]) -> Tuple[Dict[int, Tuple[Optional[Dict[str, Any]], Optional[List[Dict[str, Any]]]]], List[str], Optional[str]]:
+    enriched: Dict[int, Tuple[Optional[Dict[str, Any]], Optional[List[Dict[str, Any]]]]] = {}
+    warnings: List[str] = []
+    rate_limit_message: Optional[str] = None
+    batch_size = 6
+    for start in range(0, len(prs), batch_size):
+        batch = prs[start:start + batch_size]
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = [executor.submit(_fetch_pr_enrichment, client, owner, repo, pr) for pr in batch]
+            for future in as_completed(futures):
+                try:
+                    number, detail, timeline, item_warnings = future.result()
+                    enriched[number] = (detail, timeline)
+                    warnings.extend(item_warnings)
+                except GitHubAPIError as exc:
+                    if exc.status_code == 429:
+                        rate_limit_message = exc.detail
+                    else:
+                        warnings.append(str(exc))
+        if rate_limit_message:
+            warnings.append(rate_limit_message)
+            break
+    return enriched, warnings, rate_limit_message
+
+
+def _cached(key: Tuple[str, str, int, bool]) -> Optional[Dict[str, Any]]:
+    with _cache_lock:
+        entry = _audit_cache.get(key)
+        if entry and time() - entry[0] < CACHE_TTL_SECONDS:
+            return entry[1]
+        if entry:
+            _audit_cache.pop(key, None)
+    return None
+
+
+def _put_cache(key: Tuple[str, str, int, bool], value: Dict[str, Any]) -> None:
+    with _cache_lock:
+        if len(_audit_cache) >= MAX_CACHED_AUDITS:
+            oldest = min(_audit_cache, key=lambda item: _audit_cache[item][0])
+            _audit_cache.pop(oldest, None)
+        _audit_cache[key] = (time(), value)
+
+
+def get_or_create_user(
+    db: Session, user_dict: Optional[Dict[str, Any]]
+) -> Optional[User]:
+    """Persist the public GitHub profile used by a server-side auth session."""
     if not user_dict or not isinstance(user_dict, dict) or not user_dict.get("login"):
         return None
 
@@ -93,10 +234,10 @@ def get_or_create_user(db: Session, user_dict: Optional[Dict[str, Any]]) -> Opti
 def get_optional_auth(
     request: Request, db: Session = Depends(get_db)
 ) -> Optional[AuthContext]:
-    auth_context = resolve_auth_session(db, request.session.get("auth_session_id"))
-    if auth_context is None:
+    context = resolve_auth_session(db, request.session.get("auth_session_id"))
+    if context is None:
         request.session.pop("auth_session_id", None)
-    return auth_context
+    return context
 
 
 def github_oauth_config() -> Dict[str, str]:
@@ -117,19 +258,63 @@ def github_oauth_config() -> Dict[str, str]:
 
 
 def redirect_to_frontend(**params: str) -> RedirectResponse:
+    from urllib.parse import urlencode
+
     query = urlencode(params)
     target = f"{frontend_url}/?{query}" if query else f"{frontend_url}/"
     return RedirectResponse(target, status_code=302)
 
 
+def _audit(owner: str, repo: str, requested_limit: int, client: GitHubClient) -> Dict[str, Any]:
+    effective_limit = requested_limit if client.authenticated else min(requested_limit, MAX_UNAUTHENTICATED_SAMPLE)
+    base_url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
+    raw_prs, pages = client.get_all_pages(
+        base_url,
+        params={"state": "all", "sort": "created", "direction": "desc", "per_page": 100},
+        limit=effective_limit,
+    )
+    enriched, enrichment_warnings, partial_reason = _fetch_enrichments_batched(client, owner, repo, raw_prs)
+    as_of = datetime.now(timezone.utc)
+    records = []
+    for raw in raw_prs:
+        detail, timeline = enriched.get(int(raw["number"]), (None, None))
+        records.append(build_pull_request_record(raw, detail, timeline, as_of))
+    created_dates = [record["created_at"] for record in records if record.get("created_at")]
+    metadata = {
+        "analysis_version": "2.0.0",
+        "sample_limit_requested": requested_limit,
+        "sample_limit_applied": effective_limit,
+        "sample_truncated": len(raw_prs) >= effective_limit,
+        "pagination_pages": pages,
+        "sample_window_start": min(created_dates) if created_dates else None,
+        "sample_window_end": max(created_dates) if created_dates else None,
+        "as_of": as_of.isoformat(),
+        "github_authenticated": client.authenticated,
+        "github_rate_limit": client.rate_limit,
+        "partial": bool(partial_reason),
+        "partial_reason": partial_reason,
+        "sample_limit_note": (
+            f"Unauthenticated GitHub API access is capped at {MAX_UNAUTHENTICATED_SAMPLE} PRs per audit to reduce rate-limit exhaustion."
+            if not client.authenticated and requested_limit > MAX_UNAUTHENTICATED_SAMPLE else None
+        ),
+    }
+    result = finalize_analysis(records, owner, repo, metadata)
+    result["total_closed_prs"] = result["merged_prs_count"] + result["unmerged_closed_prs_count"]
+    result["unmerged_prs_dropped"] = 0
+    result["data_quality"]["warnings"].extend(enrichment_warnings)
+    if metadata["sample_limit_note"]:
+        result["data_quality"]["warnings"].append(metadata["sample_limit_note"])
+    return result
+
+
 @app.get("/")
-def root() -> Dict[str, Any]:
+def root():
     return {
         "service": "RevAudit API",
         "status": "active",
-        "database": "Neon-compatible PostgreSQL/SQLite",
         "docs": "/docs",
-        "audit_endpoint": "/api/audit?owner={owner}&repo={repo}",
+        "audit_endpoint": "/api/audit?owner={owner}&repo={repo}&limit=50",
+        "primary_metric": "time to first human review with right-censoring",
         "features": {
             "github_oauth": "/auth/github/login",
             "pagination": True,
@@ -141,22 +326,25 @@ def root() -> Dict[str, Any]:
 
 @app.get("/auth/github/login")
 def github_login(request: Request) -> RedirectResponse:
+    from secrets import token_urlsafe
+    from urllib.parse import urlencode
+
     config = github_oauth_config()
-    state = secrets.token_urlsafe(32)
+    state = token_urlsafe(32)
     request.session["oauth_state"] = state
     oauth_query = {
         "client_id": config["client_id"],
         "redirect_uri": config["redirect_uri"],
         "state": state,
     }
-    # OAuth Apps use scopes; GitHub Apps use the fine-grained permissions
-    # selected in their registration and should leave this value blank.
+    # OAuth Apps use scopes; GitHub Apps use their registered fine-grained
+    # permissions and should leave GITHUB_OAUTH_SCOPE blank.
     oauth_scope = os.getenv("GITHUB_OAUTH_SCOPE", "read:user user:email repo").strip()
     if oauth_scope:
         oauth_query["scope"] = oauth_scope
-    query = urlencode(oauth_query)
     return RedirectResponse(
-        f"https://github.com/login/oauth/authorize?{query}", status_code=302
+        "https://github.com/login/oauth/authorize?" + urlencode(oauth_query),
+        status_code=302,
     )
 
 
@@ -186,7 +374,7 @@ def github_callback(
                 "redirect_uri": config["redirect_uri"],
             },
             headers={"Accept": "application/json"},
-            timeout=20,
+            timeout=REQUEST_TIMEOUT_SECONDS,
         )
         if token_response.status_code != 200:
             return redirect_to_frontend(auth_error="GitHub token exchange failed")
@@ -200,9 +388,9 @@ def github_callback(
             headers={
                 "Accept": "application/vnd.github+json",
                 "Authorization": f"Bearer {access_token}",
-                "X-GitHub-Api-Version": "2022-11-28",
+                "X-GitHub-Api-Version": API_VERSION,
             },
-            timeout=20,
+            timeout=REQUEST_TIMEOUT_SECONDS,
         )
         if profile_response.status_code != 200:
             return redirect_to_frontend(auth_error="GitHub profile lookup failed")
@@ -224,7 +412,9 @@ def github_callback(
 
 
 @app.get("/api/auth/me")
-def auth_me(auth_context: Optional[AuthContext] = Depends(get_optional_auth)) -> Dict[str, Any]:
+def auth_me(
+    auth_context: Optional[AuthContext] = Depends(get_optional_auth),
+) -> Dict[str, Any]:
     if auth_context is None:
         return {"authenticated": False, "user": None}
     return {
@@ -239,246 +429,35 @@ def auth_me(auth_context: Optional[AuthContext] = Depends(get_optional_auth)) ->
 
 
 @app.post("/api/auth/logout")
-def auth_logout(
-    request: Request,
-    db: Session = Depends(get_db),
-) -> Dict[str, bool]:
+def auth_logout(request: Request, db: Session = Depends(get_db)) -> Dict[str, bool]:
     revoke_auth_session(db, request.session.get("auth_session_id"))
     request.session.clear()
     return {"ok": True}
 
 
-def sync_reviews(
-    db: Session,
-    client: GitHubClient,
-    owner: str,
-    repo: str,
-    review_targets: list[PullRequest],
-) -> Dict[str, Any]:
-    """Fetch and idempotently upsert review events for merged PRs."""
-    max_prs = int(os.getenv("GITHUB_REVIEW_MAX_PRS", "250"))
-    synced_prs = 0
-    synced_events = 0
-    error = None
-
-    for pull_request in review_targets[:max_prs]:
-        try:
-            reviews = client.list_reviews(owner, repo, pull_request.pr_number)
-        except GitHubAPIError as exc:
-            error = exc.message
-            break
-
-        for review in reviews:
-            reviewer = get_or_create_user(db, review.get("user"))
-            github_review_id = review.get("id")
-            existing = None
-            if github_review_id is not None:
-                existing = (
-                    db.query(ReviewEvent)
-                    .filter(
-                        ReviewEvent.pr_id == pull_request.id,
-                        ReviewEvent.github_review_id == github_review_id,
-                    )
-                    .first()
-                )
-            submitted_at = parse_utc_dt(review.get("submitted_at"))
-            if existing is None and github_review_id is None:
-                existing = (
-                    db.query(ReviewEvent)
-                    .filter(
-                        ReviewEvent.pr_id == pull_request.id,
-                        ReviewEvent.reviewer_id == (reviewer.id if reviewer else None),
-                        ReviewEvent.submitted_at == submitted_at,
-                    )
-                    .first()
-                )
-            if existing is None:
-                existing = ReviewEvent(
-                    github_review_id=github_review_id,
-                    pr_id=pull_request.id,
-                    reviewer_id=reviewer.id if reviewer else None,
-                    state=review.get("state", "COMMENTED"),
-                    body=review.get("body") or "",
-                    submitted_at=submitted_at,
-                )
-                db.add(existing)
-                synced_events += 1
-            else:
-                existing.reviewer_id = reviewer.id if reviewer else existing.reviewer_id
-                existing.state = review.get("state", existing.state)
-                existing.body = review.get("body") or existing.body
-                existing.submitted_at = submitted_at or existing.submitted_at
-        pull_request.reviews_synced_at = utc_now()
-        synced_prs += 1
-        db.flush()
-
-    db.commit()
-    return {
-        "prs_synced": synced_prs,
-        "events_upserted": synced_events,
-        "error": error,
-        "limit": max_prs,
-    }
-
-
 @app.get("/api/audit")
 def audit_repository(
-    owner: str = Query(..., description="GitHub repository owner/organization"),
-    repo: str = Query(..., description="GitHub repository name"),
-    db: Session = Depends(get_db),
+    owner: str = Query(..., min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_.-]+$"),
+    repo: str = Query(..., min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_.-]+$"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of recent PRs to include."),
+    refresh: bool = Query(False, description="Skip the five-minute in-memory cache."),
     auth_context: Optional[AuthContext] = Depends(get_optional_auth),
-) -> Dict[str, Any]:
-    """Paginate PRs, sync review events, calculate workload, and analyze a repo."""
-    clean_owner = owner.strip()
-    clean_repo = repo.strip()
-    if not clean_owner or not clean_repo:
-        raise HTTPException(status_code=422, detail="owner and repo are required")
-
-    repo_obj = (
-        db.query(Repository)
-        .filter(
-            func.lower(Repository.owner) == clean_owner.lower(),
-            func.lower(Repository.name) == clean_repo.lower(),
-        )
-        .first()
-    )
-    if repo_obj is None:
-        repo_obj = Repository(owner=clean_owner, name=clean_repo)
-        db.add(repo_obj)
-        db.commit()
-        db.refresh(repo_obj)
-
-    client = GitHubClient(token=auth_context.access_token if auth_context else None)
-    had_last_sync = repo_obj.last_synced_at is not None
-    raw_prs = []
-    sync_error = None
+):
+    token = auth_context.access_token if auth_context else os.getenv("GITHUB_TOKEN")
+    can_cache = auth_context is None
+    cache_key = (owner.lower(), repo.lower(), limit, bool(token))
+    if can_cache and not refresh:
+        cached = _cached(cache_key)
+        if cached:
+            return cached
+    client = GitHubClient(token)
     try:
-        raw_prs = client.list_closed_pull_requests(
-            clean_owner,
-            clean_repo,
-            stop_before=repo_obj.last_synced_at.isoformat()
-            if repo_obj.last_synced_at
-            else None,
-        )
+        result = _audit(owner, repo, limit, client)
     except GitHubAPIError as exc:
-        sync_error = exc.message
-        if exc.status_code == 404:
-            raise HTTPException(status_code=404, detail=exc.message) from exc
-
-    changed_prs: list[PullRequest] = []
-    new_prs_fetched = 0
-    for pr_data in raw_prs:
-        pr_number = pr_data.get("number")
-        if not pr_number:
-            continue
-        created_at = parse_utc_dt(pr_data.get("created_at")) or utc_now()
-        merged_at = parse_utc_dt(pr_data.get("merged_at"))
-        closed_at = parse_utc_dt(pr_data.get("closed_at"))
-        body_text = pr_data.get("body") or ""
-        author = get_or_create_user(db, pr_data.get("user"))
-        pull_request = (
-            db.query(PullRequest)
-            .filter(
-                PullRequest.repo_id == repo_obj.id,
-                PullRequest.pr_number == pr_number,
-            )
-            .first()
-        )
-        if pull_request is None:
-            pull_request = PullRequest(
-                repo_id=repo_obj.id,
-                pr_number=pr_number,
-                title=pr_data.get("title", f"PR #{pr_number}"),
-                created_at=created_at,
-            )
-            db.add(pull_request)
-            new_prs_fetched += 1
-
-        pull_request.title = pr_data.get("title", pull_request.title)
-        pull_request.author_id = author.id if author else pull_request.author_id
-        pull_request.state = pr_data.get("state", pull_request.state or "closed")
-        pull_request.body = body_text
-        pull_request.body_length = len(body_text)
-        pull_request.size_category = categorize_pr_size(len(body_text))
-        pull_request.additions = int(pr_data.get("additions") or 0)
-        pull_request.deletions = int(pr_data.get("deletions") or 0)
-        pull_request.changed_files = int(pr_data.get("changed_files") or 0)
-        pull_request.html_url = pr_data.get("html_url")
-        pull_request.created_at = created_at
-        pull_request.closed_at = closed_at
-        pull_request.merged_at = merged_at
-        if merged_at and created_at:
-            pull_request.review_time_hours = round(
-                max(0.0, (merged_at - created_at).total_seconds() / 3600.0), 2
-            )
-        else:
-            pull_request.review_time_hours = None
-        if pull_request.merged_at is not None:
-            # The PR appeared in the delta, so its review list may have changed.
-            pull_request.reviews_synced_at = None
-        changed_prs.append(pull_request)
-
-    db.flush()
-    all_repo_prs = (
-        db.query(PullRequest)
-        .filter(PullRequest.repo_id == repo_obj.id)
-        .all()
-    )
-
-    review_targets: list[PullRequest] = []
-    seen_ids = set()
-    for pull_request in [*changed_prs, *all_repo_prs]:
-        if (
-            pull_request.id not in seen_ids
-            and pull_request.merged_at is not None
-            and pull_request.reviews_synced_at is None
-        ):
-            review_targets.append(pull_request)
-            seen_ids.add(pull_request.id)
-
-    review_sync = (
-        sync_reviews(db, client, clean_owner, clean_repo, review_targets)
-        if not sync_error
-        else {"prs_synced": 0, "events_upserted": 0, "error": None, "limit": 0}
-    )
-
-    if not sync_error:
-        repo_obj.last_synced_at = utc_now()
-        db.commit()
-    all_repo_prs = (
-        db.query(PullRequest)
-        .filter(PullRequest.repo_id == repo_obj.id)
-        .all()
-    )
-
-    if not all_repo_prs and sync_error:
-        raise HTTPException(status_code=502, detail=sync_error)
-
-    analysis = analyze_pull_requests(all_repo_prs, db)
-    return {
-        "owner": repo_obj.owner,
-        "repo": repo_obj.name,
-        "total_closed_prs": len(all_repo_prs),
-        "merged_prs_count": len(analysis["merged_prs"]),
-        "unmerged_prs_dropped": len(all_repo_prs) - len(analysis["merged_prs"]),
-        "baseline_medians": analysis["baseline_medians"],
-        "anomalies_count": len(analysis["anomalies"]),
-        "anomalies": analysis["anomalies"],
-        "pull_requests": analysis["merged_prs"],
-        "workload_summary": analysis["workload_summary"],
-        "data_source": "neon_database" if sync_error else "github_paginated_sync",
-        "new_prs_fetched": new_prs_fetched,
-        "last_synced_at": repo_obj.last_synced_at.isoformat()
-        if repo_obj.last_synced_at
-        else None,
-        "pagination": {
-            "enabled": True,
-            "max_pages": client.max_pages,
-            "stop_at_last_sync": had_last_sync,
-        },
-        "review_sync": review_sync,
-        "sync_error": sync_error,
-    }
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+    if can_cache and not result["metadata"]["partial"]:
+        _put_cache(cache_key, result)
+    return result
 
 
 @app.post("/api/reports/pdf")
@@ -505,5 +484,4 @@ def export_audit_pdf(payload: Dict[str, Any] = Body(...)) -> Response:
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
