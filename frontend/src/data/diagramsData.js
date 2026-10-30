@@ -91,7 +91,7 @@ API -> API : Validate query parameters\\nCheck rate limit headers
 API -> Engine : run_audit_pipeline(raw_prs)
 activate Engine
 
-Engine -> Engine : Drop unmerged PRs (merged_at != null)\\nCompute review_time_hours\\nGroup by size cohort (Small/Med/Large)\\nCalculate medians & 90% CI\\nFlag PRs exceeding 1.5x median
+Engine -> Engine : Retain open/closed PRs\\nExtract first human review event\\nRight-censor unreviewed PRs\\nGroup by changed lines/files\\nKaplan-Meier + bootstrap 95% CI\\nRobust adjusted residual triage
 
 Engine --> API : Return {baseline_medians, anomalies: [...], health_score}
 deactivate Engine
@@ -163,7 +163,7 @@ Backend -> Backend : Hand off raw PR list to Pandas Data Cleaning Engine
     pumlPath: `${import.meta.env.BASE_URL}diagrams/04_sequence_pandas_baseline.puml`,
     fallbackSvg: `${import.meta.env.BASE_URL}diagrams/04_sequence_pandas_baseline.svg`,
     sourceFile: 'docs/diagrams/04_sequence_pandas_baseline.puml',
-    description: 'Traces the mathematical lifecycle: survival bias correction, complexity grouping, median aggregation, 90% confidence intervals, and 1.5x outlier flagging.',
+    description: 'Traces paginated ingestion, human review events, right-censoring, code scope, Kaplan–Meier estimates, bootstrap intervals, and robust adjusted triage.',
     puml: `@startuml sequence_pandas_baseline
 !theme plain
 autonumber
@@ -180,24 +180,24 @@ Controller -> Pandas : process_and_audit(raw_prs_json)
 activate Pandas
 
 Pandas -> Pandas : df = pd.DataFrame(raw_prs_json)
-Pandas -> Pandas : Filter: df = df[df['merged_at'].notna()]\\n(Drop unmerged PRs - Imputation)
+Pandas -> Pandas : Keep open/closed PRs; derive review event or censor time
 
-Pandas -> Pandas : df['review_time_hours'] = (df['merged_at'] - df['created_at']) / 3600
-Pandas -> Pandas : df['body_length'] = df['body'].str.len()
-Pandas -> Pandas : df['size_category'] = df['body_length'].apply(categorize_size)\\n(Small <250, Med 250-1000, Large >1000)
+Pandas -> Pandas : time to first human review; censor when absent
+Pandas -> Pandas : complexity = changed lines + changed files
+Pandas -> Pandas : classify Small / Medium / Large / Unknown
 
 Pandas -> Stats : compute_group_stats(df, groupby='size_category')
 activate Stats
 
-Stats -> Stats : Calculate median(review_time_hours) per size cohort
-Stats -> Stats : Compute 90% Confidence Intervals:\\nCI_90 = median +/- 1.645 * (std / sqrt(n))
+Stats -> Stats : Kaplan-Meier median per code scope cohort
+Stats -> Stats : Bootstrap 95% interval when sample support permits
 Stats --> Pandas : Return baseline_medians {Small, Medium, Large}
 deactivate Stats
 
 Pandas -> Stats : flag_anomalies(df, baseline_medians, multiplier=1.5)
 activate Stats
 loop For each merged PR in df
-    Stats -> Stats : If review_time_hours > 1.5 * group_median:\\nFlag as Anomaly\\nCompute variance_ratio = review_time / group_median
+    Stats -> Stats : Huber robust regression of log first-review latency\\nFlag absolute robust residual z >= 2.5 for process triage
 end
 Stats --> Pandas : Return anomalies list (sorted desc by ratio)
 deactivate Stats

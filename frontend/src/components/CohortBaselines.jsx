@@ -6,21 +6,22 @@ export default function CohortBaselines({ baselineMedians = {} }) {
     {
       key: 'Small',
       name: 'Small PRs',
-      desc: '< 250 characters (minor fixes, docs, typos)',
+      desc: 'Up to 100 changed lines and 5 files',
       badgeColor: 'bg-slate-800 text-slate-300 border-slate-700'
     },
     {
       key: 'Medium',
       name: 'Medium PRs',
-      desc: '250 – 1000 characters (standard feature work)',
+      desc: 'Up to 1,000 changed lines and 20 files',
       badgeColor: 'bg-slate-800 text-slate-300 border-slate-700'
     },
     {
       key: 'Large',
       name: 'Large PRs',
-      desc: '> 1000 characters (architectural refactors)',
+      desc: 'Above either medium cutoff',
       badgeColor: 'bg-slate-800 text-slate-300 border-slate-700'
-    }
+    },
+    { key: 'Unknown', name: 'Unknown scope', desc: 'Code change metadata unavailable' }
   ];
 
   return (
@@ -31,18 +32,16 @@ export default function CohortBaselines({ baselineMedians = {} }) {
           <span>Size-Controlled Review Baselines</span>
         </h3>
         <span className="text-xs text-slate-400">
-          Cohort medians with 90% confidence intervals (CI₉₀)
+          Time to first human review; Kaplan–Meier median with bootstrap 95% interval
         </span>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         {cohorts.map((cohort) => {
           const data = baselineMedians?.[cohort.key];
           const hasData = Boolean(data && data.sample_size > 0);
-          const medianHours = hasData ? data.median_hours : 0;
-          const ciLower = hasData && data.mock_ci_90 ? data.mock_ci_90[0] : 0;
-          const ciUpper = hasData && data.mock_ci_90 ? data.mock_ci_90[1] : 0;
-          const threshold = (medianHours * 1.5).toFixed(2);
+          const medianHours = hasData ? data.median_hours : null;
+          const ci = data?.confidence_interval_95;
 
           return (
             <div 
@@ -67,27 +66,21 @@ export default function CohortBaselines({ baselineMedians = {} }) {
                   <div className="flex items-baseline justify-between">
                     <span className="text-xs text-slate-400">Cohort Median:</span>
                     <span className="text-base font-bold font-mono text-white tabular-nums">
-                      {medianHours.toFixed(2)}h
+                      {medianHours == null ? 'Median not reached' : `${medianHours.toFixed(2)}h`}
                     </span>
                   </div>
 
                   <div className="flex items-center justify-between text-xs text-slate-400">
-                    <span>90% CI:</span>
+                    <span>95% CI:</span>
                     <span className="font-mono text-slate-300 tabular-nums">
-                      [{ciLower.toFixed(2)}h – {ciUpper.toFixed(2)}h]
+                      {ci ? `[${ci[0].toFixed(2)}h – ${ci[1].toFixed(2)}h]` : 'Unavailable'}
                     </span>
                   </div>
-
-                  <div className="flex items-center justify-between text-xs text-slate-400">
-                    <span>Anomaly Threshold:</span>
-                    <span className="font-mono text-amber-400 font-medium tabular-nums">
-                      &gt; {threshold}h
-                    </span>
-                  </div>
+                  <div className="text-[11px] text-slate-500">{data.event_count} reviewed · {data.censored_count} censored</div>
                 </div>
               ) : (
                 <div className="py-2 text-center text-xs text-slate-400 border border-dashed border-slate-800/80 rounded">
-                  No merged PRs in this cohort
+                  No usable timeline records in this cohort
                 </div>
               )}
             </div>

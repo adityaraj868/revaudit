@@ -4,19 +4,19 @@ import { BarChart2, ScatterChart } from 'lucide-react';
 export function CohortLatencyChart({ baselineMedians = {} }) {
   const [hoveredCohort, setHoveredCohort] = useState(null);
 
-  const cohortKeys = ['Small', 'Medium', 'Large'];
+  const cohortKeys = ['Small', 'Medium', 'Large', 'Unknown'];
   const cohortsData = cohortKeys.map((key) => {
     const d = baselineMedians?.[key];
-    const median = d ? d.median_hours : 0;
-    const ciLower = d && d.mock_ci_90 ? d.mock_ci_90[0] : 0;
-    const ciUpper = d && d.mock_ci_90 ? d.mock_ci_90[1] : 0;
+    const median = d?.median_hours ?? 0;
+    const ciLower = d?.confidence_interval_95 ? d.confidence_interval_95[0] : 0;
+    const ciUpper = d?.confidence_interval_95 ? d.confidence_interval_95[1] : 0;
     const sample = d ? d.sample_size : 0;
-    const threshold = median * 1.5;
-    return { key, median, ciLower, ciUpper, sample, threshold };
+    const estimated = d?.median_hours != null;
+    return { key, median, ciLower, ciUpper, sample, estimated, hasInterval: Boolean(d?.confidence_interval_95) };
   });
 
   const maxVal = Math.max(
-    ...cohortsData.map(c => Math.max(c.threshold, c.ciUpper)),
+    ...cohortsData.map(c => c.ciUpper),
     10.0
   );
 
@@ -34,10 +34,10 @@ export function CohortLatencyChart({ baselineMedians = {} }) {
       <div>
         <h4 className="text-xs font-semibold text-slate-200 flex items-center space-x-1.5">
           <BarChart2 className="w-3.5 h-3.5 text-slate-400" />
-          <span>Cohort Medians &amp; 90% Confidence Intervals</span>
+          <span>First Review Latency by Code Change Scope</span>
         </h4>
         <p className="text-xs text-slate-400 mt-0.5">
-          Review turnaround time (hours) with 90% CI error bounds and 1.5x anomaly thresholds
+          Kaplan–Meier medians with bootstrap 95% intervals where estimable
         </p>
       </div>
 
@@ -83,7 +83,6 @@ export function CohortLatencyChart({ baselineMedians = {} }) {
 
             const ciY1 = yScale(c.ciUpper) + padding.top;
             const ciY2 = yScale(c.ciLower) + padding.top;
-            const threshY = yScale(c.threshold) + padding.top;
 
             const isHovered = hoveredCohort === c.key;
 
@@ -94,30 +93,8 @@ export function CohortLatencyChart({ baselineMedians = {} }) {
                 onMouseLeave={() => setHoveredCohort(null)}
                 className="cursor-pointer"
               >
-                {/* 1.5x Anomaly Threshold */}
-                {c.sample > 0 && (
-                  <g>
-                    <line
-                      x1={xCenter - 28}
-                      y1={threshY}
-                      x2={xCenter + 28}
-                      y2={threshY}
-                      stroke="#d97706"
-                      strokeWidth="1.25"
-                      strokeDasharray="3 2"
-                    />
-                    <text
-                      x={xCenter + 30}
-                      y={threshY + 3}
-                      className="text-[9px] font-mono fill-amber-400 font-medium"
-                    >
-                      1.5x ({c.threshold.toFixed(1)}h)
-                    </text>
-                  </g>
-                )}
-
                 {/* Main Bar */}
-                {c.sample > 0 ? (
+                {c.sample > 0 && c.estimated ? (
                   <rect
                     x={barX}
                     y={barY}
@@ -138,8 +115,8 @@ export function CohortLatencyChart({ baselineMedians = {} }) {
                   />
                 )}
 
-                {/* 90% CI Error Whisker */}
-                {c.sample > 0 && (
+                {/* Bootstrap 95% interval whisker */}
+                {c.sample > 0 && c.hasInterval && (
                   <g stroke="#93c5fd" strokeWidth="1.5">
                     <line x1={xCenter} y1={ciY1} x2={xCenter} y2={ciY2} />
                     <line x1={xCenter - 5} y1={ciY1} x2={xCenter + 5} y2={ciY1} />
@@ -148,7 +125,7 @@ export function CohortLatencyChart({ baselineMedians = {} }) {
                 )}
 
                 {/* Median Text */}
-                {c.sample > 0 && (
+                {c.sample > 0 && c.estimated && (
                   <text
                     x={xCenter}
                     y={barY - 5}
@@ -190,11 +167,11 @@ export function CohortLatencyChart({ baselineMedians = {} }) {
           </span>
           <span className="flex items-center space-x-1.5">
             <span className="w-3 h-0.5 bg-blue-300 inline-block"></span>
-            <span>90% CI</span>
+            <span>95% bootstrap CI</span>
           </span>
           <span className="flex items-center space-x-1.5">
             <span className="w-3 h-0.5 border-t border-amber-500 border-dashed inline-block"></span>
-            <span>1.5x Threshold</span>
+            <span>Robust model triage</span>
           </span>
         </div>
       </div>
@@ -212,11 +189,11 @@ export function TurnaroundScatterChart({ anomalies = [], baselineMedians = {}, o
     prNumber: a.pr_number,
     title: a.title,
     author: a.author,
-    size: a.body_length || 34,
+    size: a.changed_lines || 0,
     time: a.review_time_hours || 0,
     cohort: a.size_category || 'Small',
     groupMedian: a.group_median_hours || 0,
-    ratio: a.anomaly_ratio || 1.5,
+    ratio: a.standardized_residual || 0,
     htmlUrl: a.html_url,
     isAnomaly: true
   }));
@@ -228,8 +205,8 @@ export function TurnaroundScatterChart({ anomalies = [], baselineMedians = {}, o
     prNumber: `Cohort ${cat}`,
     title: `${cat} Cohort Median Reference`,
     author: 'baseline',
-    size: cat === 'Small' ? 120 : cat === 'Medium' ? 600 : 1500,
-    time: val.median_hours,
+    size: cat === 'Small' ? 50 : cat === 'Medium' ? 500 : cat === 'Large' ? 1500 : 0,
+    time: val.median_hours || 0,
     cohort: cat,
     groupMedian: val.median_hours,
     ratio: 1.0,
@@ -260,7 +237,7 @@ export function TurnaroundScatterChart({ anomalies = [], baselineMedians = {}, o
           <span>Review Latency vs. PR Complexity</span>
         </h4>
         <p className="text-xs text-slate-400 mt-0.5">
-          Observed turnaround time (hours) plotted against PR description length (L_body). Click points to inspect.
+          First-review queue latency (hours) plotted against changed lines. Click points to inspect.
         </p>
       </div>
 
@@ -344,7 +321,7 @@ export function TurnaroundScatterChart({ anomalies = [], baselineMedians = {}, o
                     textAnchor="middle"
                     className="text-[9px] font-mono font-medium fill-rose-300 pointer-events-none"
                   >
-                    #{p.prNumber} (+{p.ratio}x)
+                    #{p.prNumber} ({p.ratio > 0 ? '+' : ''}{p.ratio} z)
                   </text>
                 </g>
               );
@@ -371,13 +348,13 @@ export function TurnaroundScatterChart({ anomalies = [], baselineMedians = {}, o
 
           {/* X Axis Labels */}
           <text x={padding.left + xScale(125)} y={chartHeight - 12} textAnchor="middle" className="text-[10px] font-sans fill-slate-400">
-            Small (&lt;250c)
+            Small (≤100 lines)
           </text>
           <text x={padding.left + xScale(625)} y={chartHeight - 12} textAnchor="middle" className="text-[10px] font-sans fill-slate-400">
-            Medium (250-1000c)
+            Medium (≤1,000 lines)
           </text>
           <text x={padding.left + xScale(1750)} y={chartHeight - 12} textAnchor="middle" className="text-[10px] font-sans fill-slate-400">
-            Large (&gt;1000c)
+            Large / Unknown
           </text>
         </svg>
       </div>
@@ -398,7 +375,7 @@ export function TurnaroundScatterChart({ anomalies = [], baselineMedians = {}, o
               {selectedPoint.title || 'Pull Request inspection'}
             </p>
             <div className="text-[10px] text-slate-400 font-mono">
-              Turnaround: <strong className="text-slate-200">{selectedPoint.time.toFixed(2)}h</strong> • Cohort Median: {selectedPoint.groupMedian.toFixed(2)}h {selectedPoint.isAnomaly && `(+${selectedPoint.ratio}x)`}
+              First review: <strong className="text-slate-200">{selectedPoint.time.toFixed(2)}h</strong> • Cohort median: {selectedPoint.groupMedian.toFixed(2)}h {selectedPoint.isAnomaly && `(${selectedPoint.ratio > 0 ? '+' : ''}${selectedPoint.ratio} z)`}
             </div>
           </div>
 
@@ -439,7 +416,7 @@ export function TurnaroundScatterChart({ anomalies = [], baselineMedians = {}, o
           </span>
           <span className="flex items-center space-x-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
-            <span>Flagged Anomaly (&gt;1.5x)</span>
+            <span>Adjusted latency signal</span>
           </span>
         </div>
       </div>

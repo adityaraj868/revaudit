@@ -21,7 +21,7 @@ export const PRESENTATION_SLIDES = [
       },
       {
         title: 'Prototype Integrity',
-        text: 'Live operational analytics engine with zero fabricated data: direct API querying, survival bias filtering, 90% confidence intervals, and 1.5x anomaly threshold detection.'
+        text: 'Live repository analytics using paginated GitHub data, censoring-aware first-review latency, bootstrap uncertainty, and robust adjusted process signals.'
       }
     ],
     speakerNotes: "Welcome. Today Team ArchCoders presents RevAudit. In modern software engineering, 'time-to-merge' is often used as a metric for team velocity. However, this metric is fundamentally broken because it treats all pull requests equally. RevAudit normalizes PR turnaround times using statistical baselines and flags true review anomalies without blaming individual contributors.",
@@ -55,31 +55,31 @@ export const PRESENTATION_SLIDES = [
     id: '03_solution',
     num: '03',
     category: 'Methodology',
-    title: 'Size-Controlled Medians & 1.5x Anomaly Multiplier Pipeline',
-    subtitle: 'The five-stage data cleaning, stratification, and non-parametric anomaly pipeline',
+    title: 'Censoring-Aware Review Latency Analysis',
+    subtitle: 'A five-stage event-based and uncertainty-aware process analysis',
     stages: [
       {
-        step: '1. Ingestion & Survival Imputation',
-        desc: 'Ingests closed PRs via GitHub REST API v3 and discards unmerged/abandoned branches (merged_at != null) to eliminate survivor bias from rejected experiments.'
+        step: '1. Paginated Ingestion',
+        desc: 'Fetches recent open and closed PRs with pagination, metadata, code-change statistics, and timeline events.'
       },
       {
         step: '2. Complexity Stratification',
-        desc: 'Partitions PRs by description character length: Small (<250 chars), Medium (250–1000 chars), and Large (>1000 chars) cohorts.'
+        desc: 'Groups by changed lines and files; records with unavailable code statistics stay in an Unknown cohort.'
       },
       {
-        step: '3. Non-Parametric Median (x̃)',
-        desc: 'Calculates the 50th percentile breakdown-point median for each size cohort, ensuring extreme outliers cannot skew the baseline.'
+        step: '3. First Review & Censoring',
+        desc: 'Measures time to first human review and retains unreviewed PRs as right-censored observations.'
       },
       {
-        step: '4. 90% Confidence Interval',
-        desc: 'Computes sampling uncertainty bounds: CI_90 = x̃ ± 1.645 * (s / sqrt(n)) to provide statistically credible margins.'
+        step: '4. Kaplan–Meier & Bootstrap',
+        desc: 'Estimates cohort medians with Kaplan–Meier and reports percentile bootstrap 95% intervals when support is sufficient.'
       },
       {
-        step: '5. 1.5x Anomaly Multiplier',
-        desc: 'Flags any PR whose review duration exceeds 1.5x the cohort median (Δt > 1.5 * x̃_C) with computed variance ratio R_i.'
+        step: '5. Robust Adjusted Triage',
+        desc: 'Uses Huber regression on latency with code churn, file count, contributor history, and reviewer activity; residual signals are process triage, not quality scores.'
       }
     ],
-    speakerNotes: "Rather than comparing pull requests across the entire repository, RevAudit groups PRs into size cohorts. A small PR is only compared against other small PRs. We compute the median—which resists extreme outliers—and estimate a 90% confidence interval. Any PR taking more than 1.5 times its cohort median is flagged as an anomaly for engineering inspection.",
+    speakerNotes: "RevAudit estimates time to first human review, keeps open and unreviewed work as censored observations, and separates lifecycle stages. Code churn and file count provide coarse scope controls. Bootstrap uncertainty and robust adjusted residuals are surfaced with sample limitations so signals guide process investigation rather than individual evaluation.",
     diagramId: '02_sequence_audit_request'
   },
   {
@@ -153,7 +153,7 @@ export const PRESENTATION_SLIDES = [
           'FastAPI application routing and CORS architecture (backend/main.py)',
           'Pandas data pipeline for survival imputation and cohort median aggregation',
           'GitHub REST API v3 integration with 403 rate-limit and 404 handler',
-          'Mathematical 90% confidence interval & 1.5x anomaly threshold algorithms'
+          'Kaplan–Meier medians, bootstrap 95% intervals, and robust adjusted process triage'
         ]
       },
       {
@@ -237,7 +237,7 @@ export const PRESENTATION_SLIDES = [
       },
       {
         title: 'Explicit Sampling Uncertainty',
-        desc: 'All baseline medians display 90% confidence intervals. Small sample cohorts are flagged to prevent overconfidence.'
+        desc: 'Bootstrap 95% intervals are displayed when sample size and event support permit; otherwise uncertainty is clearly marked unavailable.'
       },
       {
         title: 'Confounder-Controlled Evaluation',

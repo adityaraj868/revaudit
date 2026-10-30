@@ -52,15 +52,14 @@ export default function ReviewAnalysisView({
 
   const baselineMedians = auditData?.baseline_medians || {};
   const anomalies = auditData?.anomalies || [];
-  const mergedCount = auditData?.merged_prs_count || 0;
-  const totalClosed = auditData?.total_closed_prs || 0;
-  const droppedCount = auditData?.unmerged_prs_dropped || 0;
-  const retentionRate = totalClosed > 0 ? ((mergedCount / totalClosed) * 100).toFixed(1) : '0.0';
+  const totalSample = auditData?.total_prs_in_sample || 0;
+  const censoredCount = auditData?.first_review_censored_count || 0;
 
   const cohortDefinitions = [
-    { key: 'Small', name: 'Small PRs', range: '< 250 chars', desc: 'Minor bugfixes, docs, typo patches' },
-    { key: 'Medium', name: 'Medium PRs', range: '250 – 1000 chars', desc: 'Standard feature updates, components' },
-    { key: 'Large', name: 'Large PRs', range: '> 1000 chars', desc: 'Subsystem overhauls, major migrations' }
+    { key: 'Small', name: 'Small PRs', range: '≤100 lines; ≤5 files', desc: 'Lower code churn' },
+    { key: 'Medium', name: 'Medium PRs', range: '≤1,000 lines; ≤20 files', desc: 'Moderate code churn' },
+    { key: 'Large', name: 'Large PRs', range: 'Above medium cutoff', desc: 'Higher code churn' },
+    { key: 'Unknown', name: 'Unknown scope', range: 'Missing code stats', desc: 'Scope unavailable' }
   ];
 
   // Filter anomalies by selected cohort
@@ -76,11 +75,11 @@ export default function ReviewAnalysisView({
   return (
     <div className="space-y-6 font-sans">
       <PageHeader
-        title={`Review Effort Analysis: ${currentRepo}`}
-        subtitle="Cohort stratification and turnaround distributions controlling for pull request complexity"
+        title={`Review Queue Latency Analysis: ${currentRepo}`}
+        subtitle="First human review latency with censored observations and robust adjusted triage"
         badges={[
-          { label: `${mergedCount} Merged PRs Evaluated`, color: 'bg-slate-800 text-slate-300 border-slate-700' },
-          { label: `${droppedCount} Unmerged Discarded`, color: 'bg-slate-800 text-slate-400 border-slate-700' },
+          { label: `${totalSample} PRs Sampled`, color: 'bg-slate-800 text-slate-300 border-slate-700' },
+          { label: `${censoredCount} Right-Censored`, color: 'bg-slate-800 text-slate-400 border-slate-700' },
           { label: `${anomalies.length} Flagged Outliers`, color: anomalies.length > 0 ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' }
         ]}
         actions={
@@ -102,10 +101,10 @@ export default function ReviewAnalysisView({
         <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-900">
           <div className="text-xs text-slate-400 font-medium">Sample Ingestion</div>
           <div className="text-xl font-bold font-mono text-white mt-1">
-            {mergedCount} <span className="text-xs font-normal text-slate-400 font-sans">/ {totalClosed} closed</span>
+            {totalSample} <span className="text-xs font-normal text-slate-400 font-sans">PRs</span>
           </div>
           <div className="text-[11px] text-slate-400 mt-1">
-            Survival retention rate: {retentionRate}%
+            {auditData?.metadata?.pagination_pages || 0} pages · {auditData?.data_quality?.timeline_coverage_pct ?? 0}% timeline coverage
           </div>
         </div>
 
@@ -115,17 +114,17 @@ export default function ReviewAnalysisView({
             {anomalies.length} <span className="text-xs font-normal text-slate-400 font-sans">PRs</span>
           </div>
           <div className="text-[11px] text-slate-400 mt-1">
-            Exceeded &gt; 1.5x cohort median
+            Adjusted robust residual threshold |z| ≥ 2.5
           </div>
         </div>
 
         <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-900">
           <div className="text-xs text-slate-400 font-medium">Complexity Stratification</div>
           <div className="text-sm font-semibold text-white mt-1">
-            Description Proxy (L_body)
+            Changed lines and file count
           </div>
           <div className="text-[11px] text-slate-400 mt-1">
-            3 Buckets: Small (&lt;250c) / Medium / Large (&gt;1000c)
+            Small / Medium / Large / Unknown
           </div>
         </div>
       </div>
@@ -148,8 +147,8 @@ export default function ReviewAnalysisView({
                 <th className="py-2.5 px-3.5 font-medium">Scope Proxy</th>
                 <th className="py-2.5 px-3.5 font-medium text-right">Sample Size (n)</th>
                 <th className="py-2.5 px-3.5 font-medium text-right">Median Latency (x̃)</th>
-                <th className="py-2.5 px-3.5 font-medium">90% Confidence Interval</th>
-                <th className="py-2.5 px-3.5 font-medium text-right">1.5x Threshold</th>
+                <th className="py-2.5 px-3.5 font-medium">95% Bootstrap CI</th>
+                <th className="py-2.5 px-3.5 font-medium text-right">Censored</th>
                 <th className="py-2.5 px-3.5 font-medium text-right">Flagged Anomalies</th>
               </tr>
             </thead>
@@ -157,9 +156,8 @@ export default function ReviewAnalysisView({
               {cohortDefinitions.map((c) => {
                 const data = baselineMedians[c.key];
                 const hasData = Boolean(data && data.sample_size > 0);
-                const median = hasData ? data.median_hours : 0;
-                const ci = hasData && data.mock_ci_90 ? data.mock_ci_90 : [0, 0];
-                const threshold = (median * 1.5).toFixed(2);
+                const median = hasData ? data.median_hours : null;
+                const ci = data?.confidence_interval_95;
                 const cohortAnomalies = anomalies.filter(a => a.size_category === c.key);
                 const isSelected = selectedCohort === c.key;
 
@@ -184,13 +182,13 @@ export default function ReviewAnalysisView({
                       {hasData ? data.sample_size : 0}
                     </td>
                     <td className="py-2.5 px-3.5 text-right font-mono font-medium text-slate-100">
-                      {hasData ? `${median.toFixed(2)}h` : '—'}
+                      {median != null ? `${median.toFixed(2)}h` : 'Not reached'}
                     </td>
                     <td className="py-2.5 px-3.5 font-mono text-slate-300">
-                      {hasData ? `[${ci[0].toFixed(2)}h – ${ci[1].toFixed(2)}h]` : '—'}
+                      {ci ? `[${ci[0].toFixed(2)}h – ${ci[1].toFixed(2)}h]` : 'Unavailable'}
                     </td>
                     <td className="py-2.5 px-3.5 text-right font-mono text-amber-400">
-                      {hasData ? `> ${threshold}h` : '—'}
+                      {hasData ? data.censored_count : '—'}
                     </td>
                     <td className="py-2.5 px-3.5 text-right font-mono font-semibold">
                       {cohortAnomalies.length > 0 ? (
@@ -228,7 +226,7 @@ export default function ReviewAnalysisView({
               </span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Pull requests that deviated beyond the 1.5x statistical boundary of their size bucket.
+              Pull requests flagged by adjusted robust residuals; both slower and faster cases are shown for process triage.
             </p>
           </div>
 
@@ -270,7 +268,7 @@ export default function ReviewAnalysisView({
             <div className="p-8 text-center text-xs text-slate-400 font-sans space-y-1">
               <CheckCircle2 className="w-6 h-6 text-emerald-400 mx-auto mb-1" />
               <div className="text-slate-200 font-medium">No Anomalies in this Cohort</div>
-              <p className="text-[11px] text-slate-500">All evaluated pull requests conformed to the 1.5x turnaround median.</p>
+              <p className="text-[11px] text-slate-500">No pull requests crossed the adjusted robust residual threshold.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -297,7 +295,7 @@ export default function ReviewAnalysisView({
                         @{item.author || 'contributor'}
                       </td>
                       <td className="py-2.5 px-3.5 font-mono text-slate-300">
-                        {item.size_category} <span className="text-[10px] text-slate-500">({item.body_length}c)</span>
+                        {item.size_category} <span className="text-[10px] text-slate-500">({item.changed_lines ?? '—'} lines)</span>
                       </td>
                       <td className="py-2.5 px-3.5 text-right font-mono font-bold text-rose-400">
                         {item.review_time_hours?.toFixed(2)}h
@@ -306,7 +304,7 @@ export default function ReviewAnalysisView({
                         {item.group_median_hours?.toFixed(2)}h
                       </td>
                       <td className="py-2.5 px-3.5 text-right font-mono font-semibold text-amber-400">
-                        +{item.anomaly_ratio?.toFixed(2)}x
+                        {item.standardized_residual > 0 ? '+' : ''}{item.standardized_residual?.toFixed(2)} z
                       </td>
                       <td className="py-2.5 px-3.5 text-right space-x-2">
                         <button
@@ -346,15 +344,15 @@ export default function ReviewAnalysisView({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1 text-slate-400 text-xs">
           <div>
             <strong className="text-slate-200 block mb-1">1. Size Stratification</strong>
-            PR description length (L_body) controls for review scope, preventing superficial approvals on small PRs from distorting complex architectural reviews.
+            Changed lines and file count provide a coarse scope control; unknown code size remains an explicit cohort.
           </div>
           <div>
             <strong className="text-slate-200 block mb-1">2. Survival Imputation</strong>
-            Unmerged/abandoned branches are discarded (merged_at ≠ null) to evaluate completed integration workflows rather than rejected experiments.
+            Open and closed unmerged PRs are included. PRs without a first review are right-censored at closure or audit time.
           </div>
           <div>
             <strong className="text-slate-200 block mb-1">3. Non-Parametric Medians</strong>
-            50% breakdown-point medians (x̃) paired with 90% confidence intervals resist right-skewed heavy-tailed latency outliers.
+            Kaplan–Meier medians include censored records; percentile bootstrap 95% intervals appear only when support is sufficient.
           </div>
         </div>
       </div>

@@ -171,7 +171,7 @@ export default function LandingPage({
 
         {/* Hero Bottom subtle fade */}
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 w-full flex items-center justify-between text-xs text-slate-400 border-t border-slate-800/40 font-mono">
-          <span>Non-Parametric Medians • 90% Confidence Bounds</span>
+          <span>Kaplan–Meier Medians • Bootstrap 95% Bounds</span>
           <span>UCS503 Software Engineering</span>
         </div>
 
@@ -199,7 +199,7 @@ export default function LandingPage({
               <div className="text-xs font-mono font-bold text-orange-400">01</div>
               <h3 className="text-lg font-semibold text-white">Pull-request complexity</h3>
               <p className="text-sm text-slate-400 leading-relaxed">
-                Stratifies pull requests by change scope and description length (L_body), preventing 5-line typo patches from skewing baselines for 2,000-line subsystem refactors.
+                Uses changed lines and file counts to estimate code scope, with an Unknown group when GitHub cannot provide change statistics.
               </p>
             </div>
 
@@ -217,7 +217,7 @@ export default function LandingPage({
               <div className="text-xs font-mono font-bold text-orange-400">03</div>
               <h3 className="text-lg font-semibold text-white">Repository context</h3>
               <p className="text-sm text-slate-400 leading-relaxed">
-                Derives empirical non-parametric medians from live repository history, guaranteeing 50% breakdown-point resistance against long-tail skew.
+                Estimates time to first human review while retaining censored PRs and reports uncertainty where sample support permits.
               </p>
             </div>
 
@@ -249,7 +249,7 @@ export default function LandingPage({
             <BarChart3 className="w-5 h-5 text-orange-400 mb-2" />
             <h3 className="text-base font-semibold text-white">Statistical Analysis</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Non-parametric median baselines resist skew caused by multi-month inactive pull requests.
+              Kaplan–Meier estimates account for open and unreviewed pull requests instead of dropping them.
             </p>
           </div>
 
@@ -265,7 +265,7 @@ export default function LandingPage({
             <Eye className="w-5 h-5 text-orange-400 mb-2" />
             <h3 className="text-base font-semibold text-white">Uncertainty Estimation</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Calculates 90% confidence intervals via median standard error to flag low-sample uncertainty.
+              Uses Kaplan–Meier survival estimates and bootstrap 95% intervals when cohort data supports them.
             </p>
           </div>
 
@@ -344,7 +344,7 @@ export default function LandingPage({
 
             <div className="p-4 rounded-lg bg-slate-900 border border-slate-800 space-y-2">
               <span className="text-[10px] text-orange-400 font-bold block">05</span>
-              <strong className="text-white block font-sans">1.5x Multiplier</strong>
+              <strong className="text-white block font-sans">Robust Adjusted Model</strong>
               <p className="text-[11px] text-slate-400 font-sans">Size-relative anomaly rule</p>
             </div>
 
@@ -397,10 +397,10 @@ export default function LandingPage({
           </div>
 
           <div className="p-6 rounded-xl border border-slate-800 bg-slate-900/60 space-y-2">
-            <div className="text-xs font-mono font-semibold text-blue-400">90% CI Bounds</div>
+            <div className="text-xs font-mono font-semibold text-blue-400">Bootstrap 95% Bounds</div>
             <h3 className="text-sm font-semibold text-white">Explicit Uncertainty</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              All statistical findings include confidence interval margins to prevent overconfident conclusions on small samples.
+              Bootstrap 95% confidence intervals appear when data supports them; otherwise the interval is explicitly unavailable.
             </p>
           </div>
 

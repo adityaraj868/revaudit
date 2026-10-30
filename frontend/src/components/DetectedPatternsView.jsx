@@ -30,13 +30,13 @@ export default function DetectedPatternsView({
     <div className="space-y-6">
       <PageHeader
         title="Detected Review Effort Patterns &amp; Anomalies"
-        subtitle={`Flagged pull requests taking > 1.5x of their size cohort baseline for ${currentRepo || 'target repository'}`}
+        subtitle={`Pull requests with unusual adjusted first-review latency for ${currentRepo || 'target repository'}`}
         badges={[
           { 
             label: `${anomaliesCount} Anomalies (${anomalyRate}% of cohort)`, 
             color: anomaliesCount > 0 ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
           },
-          { label: 'Threshold: > 1.5x Median', color: 'bg-slate-800 text-slate-300 border-slate-700' }
+          { label: 'Robust residual |z| ≥ 2.5', color: 'bg-slate-800 text-slate-300 border-slate-700' }
         ]}
         actions={
           onRefresh && (
@@ -63,7 +63,7 @@ export default function DetectedPatternsView({
               Pattern Definition: Size-Stratified Latency Outliers
             </strong>
             <span className="text-slate-400 text-[11px] font-sans">
-              Pull requests exceeding 1.5 times the median review turnaround duration of their respective size bucket.
+              Signals are based on robust residuals adjusted for code churn, files changed, first-time contributor status, and recent reviewer activity.
             </span>
           </div>
         </div>

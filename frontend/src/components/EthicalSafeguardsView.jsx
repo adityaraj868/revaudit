@@ -27,8 +27,8 @@ export default function EthicalSafeguardsView() {
     {
       title: '3. Explicit Sampling Uncertainty',
       icon: Eye,
-      badge: '90% CI Bounds',
-      desc: 'All statistical findings are accompanied by 90% confidence interval margins. Cohorts with small sample sizes are highlighted with explicit caveats to prevent overconfident conclusions.'
+      badge: 'Bootstrap 95% intervals',
+      desc: 'Cohort uncertainty is estimated by bootstrap when sample and event counts support it. Otherwise the interval is marked unavailable.'
     },
     {
       title: '4. Non-Parametric Resistance',

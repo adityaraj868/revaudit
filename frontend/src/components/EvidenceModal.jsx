@@ -13,12 +13,10 @@ export default function EvidenceModal({ isOpen, onClose, anomaly, repoOwner, rep
   const title = anomaly.title || `Pull Request #${prNumber}`;
   const author = anomaly.author || 'contributor';
   const sizeCategory = anomaly.size_category || 'Small';
-  const bodyLength = anomaly.body_length || 0;
-  const reviewTime = anomaly.review_time_hours || 0;
-  const medianHours = anomaly.group_median_hours || 0;
-  const ratio = anomaly.anomaly_ratio || 0;
-  const threshold = anomaly.threshold_hours || (medianHours * 1.5);
-  const ci = anomaly.mock_ci_90 || [0, 0];
+  const changedLines = anomaly.changed_lines ?? 'unknown';
+  const reviewTime = anomaly.review_time_hours;
+  const medianHours = anomaly.group_median_hours;
+  const residual = anomaly.standardized_residual;
   const htmlUrl = anomaly.html_url || `https://github.com/${repoOwner}/${repoName}/pull/${prNumber}`;
 
   return (
@@ -78,9 +76,9 @@ export default function EvidenceModal({ isOpen, onClose, anomaly, repoOwner, rep
             <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-400">
               <span>Author: <strong className="text-slate-300">@{author}</strong></span>
               <span>•</span>
-              <span>Cohort: <strong className="text-blue-400">{sizeCategory}</strong> ({bodyLength} chars)</span>
+              <span>Code scope: <strong className="text-blue-400">{sizeCategory}</strong> ({changedLines} changed lines)</span>
               <span>•</span>
-              <span>Turnaround: <strong className="text-rose-400">{reviewTime.toFixed(2)}h</strong></span>
+              <span>First review: <strong className="text-rose-400">{reviewTime?.toFixed(2) ?? '—'}h</strong></span>
             </div>
           </div>
 
@@ -93,9 +91,7 @@ export default function EvidenceModal({ isOpen, onClose, anomaly, repoOwner, rep
                 1. Statistical Finding
               </span>
               <p className="text-slate-300 text-xs leading-relaxed font-sans">
-                Review turnaround latency of <strong className="text-slate-100">{reviewTime.toFixed(2)} hours</strong> deviates significantly from the 
-                <strong className="text-slate-100"> {sizeCategory}</strong> cohort baseline (median: <strong className="text-slate-100">{medianHours.toFixed(2)} hours</strong>), exceeding the 
-                1.5x anomaly threshold (&gt; {threshold.toFixed(2)}h).
+                First human review arrived after <strong className="text-slate-100">{reviewTime?.toFixed(2) ?? '—'} hours</strong>. The adjusted robust model residual is <strong>{residual > 0 ? '+' : ''}{residual?.toFixed(2) ?? '—'}</strong> standard deviations from expected latency. This is a process triage signal, not a quality judgment.
               </p>
             </div>
 
@@ -107,16 +103,12 @@ export default function EvidenceModal({ isOpen, onClose, anomaly, repoOwner, rep
                 </span>
                 <div className="space-y-1 text-xs">
                   <div className="flex justify-between text-slate-300">
-                    <span>Observed Review Duration:</span>
-                    <strong className="text-white">{reviewTime.toFixed(2)}h</strong>
+                    <span>Time to first human review:</span>
+                    <strong className="text-white">{reviewTime?.toFixed(2) ?? '—'}h</strong>
                   </div>
                   <div className="flex justify-between text-slate-400">
-                    <span>Cohort Median (x̃):</span>
-                    <span>{medianHours.toFixed(2)}h</span>
-                  </div>
-                  <div className="flex justify-between text-slate-400">
-                    <span>1.5x Threshold:</span>
-                    <span>{threshold.toFixed(2)}h</span>
+                    <span>Unadjusted cohort median:</span>
+                    <span>{medianHours?.toFixed(2) ?? 'Not reached'}h</span>
                   </div>
                 </div>
               </div>
@@ -127,16 +119,16 @@ export default function EvidenceModal({ isOpen, onClose, anomaly, repoOwner, rep
                 </span>
                 <div className="space-y-1 text-xs">
                   <div className="flex justify-between text-slate-300">
-                    <span>Variance Ratio (Rᵢ):</span>
-                    <strong className="text-rose-400 font-bold">+{ratio.toFixed(2)}x</strong>
+                    <span>Robust residual:</span>
+                    <strong className="text-rose-400 font-bold">{residual > 0 ? '+' : ''}{residual?.toFixed(2) ?? '—'}</strong>
                   </div>
                   <div className="flex justify-between text-slate-400">
-                    <span>Absolute Residual:</span>
-                    <span>+{(reviewTime - medianHours).toFixed(2)}h</span>
+                    <span>Signal direction:</span>
+                    <span>{anomaly.anomaly_direction?.replaceAll('_', ' ')}</span>
                   </div>
                   <div className="flex justify-between text-slate-400">
-                    <span>Statistical Classification:</span>
-                    <span className="text-amber-300">Positive Outlier</span>
+                    <span>Classification:</span>
+                    <span className="text-amber-300">Triage signal</span>
                   </div>
                 </div>
               </div>
@@ -150,15 +142,15 @@ export default function EvidenceModal({ isOpen, onClose, anomaly, repoOwner, rep
                 </span>
                 <div className="space-y-1 text-xs">
                   <div className="flex justify-between text-slate-300">
-                    <span>90% Confidence Interval:</span>
-                    <strong className="text-blue-300">[{ci[0].toFixed(2)}h, {ci[1].toFixed(2)}h]</strong>
+                    <span>95% cohort interval:</span>
+                    <strong className="text-blue-300">Not attached to this model residual</strong>
                   </div>
                   <div className="flex justify-between text-slate-400">
-                    <span>Confidence Level (1 - α):</span>
-                    <span>90.0%</span>
+                    <span>Model:</span>
+                    <span>Huber robust regression</span>
                   </div>
                   <p className="text-[10px] text-slate-500 font-sans mt-1">
-                    Uncertainty estimated via standard error of cohort median.
+                    Cohort intervals use bootstrap Kaplan–Meier estimates when sample size permits.
                   </p>
                 </div>
               </div>
@@ -168,9 +160,9 @@ export default function EvidenceModal({ isOpen, onClose, anomaly, repoOwner, rep
                   5. Confounder Controls Applied
                 </span>
                 <ul className="space-y-1 text-[11px] text-slate-300 list-disc list-inside font-sans">
-                  <li><strong>PR Size Proxy:</strong> Stratified by description length ({bodyLength}c)</li>
-                  <li><strong>Survival Bias:</strong> Only merged PRs retained</li>
-                  <li><strong>Non-Parametric:</strong> 50% breakdown median</li>
+                  <li><strong>PR scope:</strong> {changedLines} changed lines and {anomaly.files_changed ?? 'unknown'} files</li>
+                  <li><strong>Censoring:</strong> Open and unreviewed PRs remain in survival estimates</li>
+                  <li><strong>Reviewers:</strong> Human review events only; bots excluded</li>
                 </ul>
               </div>
             </div>
