@@ -3,6 +3,8 @@ import { AlertTriangle, ArrowUpRight, Clock3, GitPullRequest, Search, UserRound 
 import PageHeader from './PageHeader';
 import { ErrorState, LoadingState } from './States';
 
+const EMPTY_PULL_REQUESTS = [];
+
 const formatDuration = (hours) => {
   if (hours >= 48) return `${(hours / 24).toFixed(1)} days`;
   return `${hours.toFixed(1)} hours`;
@@ -17,7 +19,7 @@ const medianOf = (values) => {
 
 export default function ContributorDashboard({ auditData, currentRepo, loading, error, onRefresh }) {
   const [username, setUsername] = useState('');
-  const allPullRequests = auditData?.pull_requests || [];
+  const allPullRequests = auditData?.pull_requests ?? EMPTY_PULL_REQUESTS;
   const isPartialSample = !Array.isArray(auditData?.pull_requests);
 
   const contributorPRs = useMemo(() => {

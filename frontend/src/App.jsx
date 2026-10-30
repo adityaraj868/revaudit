@@ -13,7 +13,7 @@ import ReviewAnalysisView from './components/ReviewAnalysisView';
 import DetectedPatternsView from './components/DetectedPatternsView';
 import LandingPage from './components/LandingPage';
 import ContributorDashboard from './components/ContributorDashboard';
-import { LoadingState, ErrorState } from './components/States';
+import { ErrorState } from './components/States';
 import { FALLBACK_AUDIT_DATA } from './data/sampleAudits';
 import { apiUrl } from './lib/api';
 import { 
