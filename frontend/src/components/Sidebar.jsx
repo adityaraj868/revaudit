@@ -9,7 +9,8 @@ import {
   GitPullRequest, 
   ExternalLink,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  UserRound
 } from 'lucide-react';
 import iconSvgSrc from '../../../design/icon.svg';
 
@@ -19,8 +20,14 @@ export default function Sidebar({ activeTab, onNavigate, anomaliesCount = 0, cur
   const navItems = [
     {
       id: 'overview',
-      label: 'Overview',
+      label: 'Reviewer Dashboard',
       icon: Activity,
+      badge: null
+    },
+    {
+      id: 'contributor',
+      label: 'Contributor Dashboard',
+      icon: UserRound,
       badge: null
     },
     {

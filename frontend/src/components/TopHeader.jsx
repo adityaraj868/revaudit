@@ -27,7 +27,8 @@ export default function TopHeader({
 
   const getBreadcrumbTitle = () => {
     switch (activeTab) {
-      case 'overview': return 'Overview';
+      case 'overview': return 'Reviewer Dashboard';
+      case 'contributor': return 'Contributor Dashboard';
       case 'analysis': return 'Review Analysis';
       case 'patterns': return 'Detected Patterns';
       case 'methodology': return 'Methodology & UML';

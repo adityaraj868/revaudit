@@ -12,6 +12,7 @@ import EthicalSafeguardsView from './components/EthicalSafeguardsView';
 import ReviewAnalysisView from './components/ReviewAnalysisView';
 import DetectedPatternsView from './components/DetectedPatternsView';
 import LandingPage from './components/LandingPage';
+import ContributorDashboard from './components/ContributorDashboard';
 import { LoadingState, ErrorState } from './components/States';
 import { FALLBACK_AUDIT_DATA } from './data/sampleAudits';
 import { 
@@ -28,7 +29,7 @@ export default function App() {
   const getInitialTab = () => {
     if (typeof window !== 'undefined') {
       const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
-      if (['overview', 'analysis', 'patterns', 'methodology', 'presentation', 'ethics'].includes(hash)) {
+      if (['overview', 'contributor', 'analysis', 'patterns', 'methodology', 'presentation', 'ethics'].includes(hash)) {
         return hash;
       }
       if (hash === 'audit' || hash === 'app' || hash === 'dashboard') return 'overview';
@@ -64,7 +65,7 @@ export default function App() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
-      if (['overview', 'analysis', 'patterns', 'methodology', 'presentation', 'ethics'].includes(hash)) {
+      if (['overview', 'contributor', 'analysis', 'patterns', 'methodology', 'presentation', 'ethics'].includes(hash)) {
         setActiveTab(hash);
       } else if (hash === 'presentation' || hash === 'deck' || hash === 'slides') {
         setActiveTab('presentation');
@@ -105,30 +106,26 @@ export default function App() {
     setCurrentRepo(parsed.slug);
 
     try {
-      // 1. Attempt Live Render Backend
       const renderUrl = `https://revaudit-backend.onrender.com/api/audit?owner=${encodeURIComponent(parsed.owner)}&repo=${encodeURIComponent(parsed.repo)}`;
-      const response = await fetch(renderUrl, { method: 'GET' });
+      const query = `?owner=${encodeURIComponent(parsed.owner)}&repo=${encodeURIComponent(parsed.repo)}`;
+      const configuredBase = import.meta.env.VITE_API_BASE_URL;
+      const localUrl = `/api/audit${query}`;
+      const primaryUrl = configuredBase
+        ? `${configuredBase.replace(/\/$/, '')}/api/audit${query}`
+        : import.meta.env.DEV ? localUrl : renderUrl;
 
-      if (response.ok) {
-        const data = await response.json();
-        setAuditData(data);
+      let response = await fetch(primaryUrl, { method: 'GET' }).catch(() => null);
+      if ((!response || !response.ok) && primaryUrl === localUrl && !FALLBACK_AUDIT_DATA[parsed.slug]) {
+        response = await fetch(renderUrl, { method: 'GET' }).catch(() => null);
+      }
+
+      if (response?.ok) {
+        setAuditData(await response.json());
+      } else if (FALLBACK_AUDIT_DATA[parsed.slug]) {
+        setAuditData(FALLBACK_AUDIT_DATA[parsed.slug]);
       } else {
-        // 2. Attempt Local Backend (:8000)
-        const localUrl = `http://localhost:8000/api/audit?owner=${encodeURIComponent(parsed.owner)}&repo=${encodeURIComponent(parsed.repo)}`;
-        const localRes = await fetch(localUrl, { method: 'GET' }).catch(() => null);
-        
-        if (localRes && localRes.ok) {
-          const localData = await localRes.json();
-          setAuditData(localData);
-        } else {
-          // 3. Fallback dataset for zero-crash resilience
-          if (FALLBACK_AUDIT_DATA[parsed.slug]) {
-            setAuditData(FALLBACK_AUDIT_DATA[parsed.slug]);
-          } else {
-            const errBody = await response.json().catch(() => ({}));
-            throw new Error(errBody.detail || `Server returned status ${response.status}`);
-          }
-        }
+        const errBody = await response?.json().catch(() => ({}));
+        throw new Error(errBody?.detail || `Unable to load audit data${response ? ` (status ${response.status})` : ''}.`);
       }
     } catch (err) {
       if (FALLBACK_AUDIT_DATA[parsed.slug]) {
@@ -238,8 +235,8 @@ export default function App() {
               
               {/* Page Title & Repo Metadata */}
               <PageHeader
-                title={`Statistical Review Audit: ${currentRepo}`}
-                subtitle="Controls for pull request complexity and reviewer workload to evaluate review turnaround consistency."
+                title={`Reviewer Dashboard: ${currentRepo}`}
+                subtitle="Repository-wide review effort, turnaround consistency, and size-controlled anomaly analysis."
                 badges={[
                   { label: 'GitHub REST API v3', color: 'bg-slate-800 text-slate-300 border-slate-700' },
                   { label: 'Non-Parametric Medians', color: 'bg-slate-800 text-slate-300 border-slate-700' },
@@ -264,13 +261,15 @@ export default function App() {
                 <ErrorState error={error} onRetry={() => handleRunAudit(currentRepo)} />
               )}
 
-              {/* Loading State */}
+              {/* Keep the dashboard visible while a live refresh is in progress. */}
               {loading && (
-                <LoadingState repo={currentRepo} />
+                <div className="rounded-lg border border-slate-800 bg-slate-900/70 px-4 py-2 text-xs text-slate-400" aria-live="polite">
+                  Refreshing audit data for <span className="font-mono text-slate-200">{currentRepo}</span>… Existing results remain visible.
+                </div>
               )}
 
               {/* Main Analytical Dashboard Content */}
-              {!loading && auditData && (
+              {auditData && (
                 <div className="space-y-6 animate-fade-in">
                   
                   {/* High Density Metric Cards Grid */}
@@ -338,6 +337,18 @@ export default function App() {
                   />
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === 'contributor' && (
+            <div className="animate-fade-in">
+              <ContributorDashboard
+                auditData={auditData}
+                currentRepo={currentRepo}
+                loading={loading}
+                error={error}
+                onRefresh={() => handleRunAudit(currentRepo)}
+              />
             </div>
           )}
 

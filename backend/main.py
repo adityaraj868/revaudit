@@ -96,6 +96,7 @@ def audit_repository(
             "merged_prs_count": 0,
             "baseline_medians": {},
             "anomalies": [],
+            "pull_requests": [],
             "message": "No closed pull requests found for this repository.",
         }
 
@@ -112,6 +113,7 @@ def audit_repository(
             "merged_prs_count": 0,
             "baseline_medians": {},
             "anomalies": [],
+            "pull_requests": [],
             "message": "No merged pull requests found in the recent closed PR history.",
         }
 
@@ -125,6 +127,7 @@ def audit_repository(
             "merged_prs_count": 0,
             "baseline_medians": {},
             "anomalies": [],
+            "pull_requests": [],
             "message": "All fetched closed PRs were closed without merging.",
         }
 
@@ -211,6 +214,28 @@ def audit_repository(
     # Sort anomalies by anomaly ratio descending
     anomalies.sort(key=lambda x: x["anomaly_ratio"], reverse=True)
 
+    # Provide the full merged sample so contributors can see their own PR history,
+    # not only the records that were flagged as anomalies.
+    pull_requests: List[Dict[str, Any]] = []
+    for _, pr in merged_df.iterrows():
+        category = str(pr["size_category"])
+        median = median_lookup.get(category, 0.0)
+        review_hours = float(pr["review_time_hours"])
+        pull_requests.append({
+            "pr_number": int(pr["number"]),
+            "title": str(pr.get("title", f"PR #{pr['number']}")),
+            "author": str(pr["author"]),
+            "size_category": category,
+            "body_length": int(pr["body_length"]),
+            "turnaround_hours": review_hours,
+            "group_median_hours": round(median, 2),
+            "anomaly_ratio": round(review_hours / max(median, 0.01), 2),
+            "is_anomaly": review_hours > 1.5 * median,
+            "html_url": str(pr.get("html_url", "")),
+            "created_at": str(pr["created_at"]),
+            "merged_at": str(pr["merged_at"]),
+        })
+
     # Step 8: Return structured JSON payload
     return {
         "owner": owner,
@@ -221,6 +246,7 @@ def audit_repository(
         "baseline_medians": baseline_medians,
         "anomalies_count": len(anomalies),
         "anomalies": anomalies,
+        "pull_requests": pull_requests,
     }
 
 
