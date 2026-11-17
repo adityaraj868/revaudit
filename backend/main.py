@@ -7,7 +7,7 @@ import os
 import re
 
 import requests
-from fastapi import Body, Depends, FastAPI, HTTPException, Query
+from fastapi import Body, Depends, FastAPI, HTTPException, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
@@ -240,6 +240,19 @@ def get_optional_auth(
     return context
 
 
+def get_bearer_token(
+    authorization: Optional[str] = Header(
+        None, description="GitHub OAuth Bearer token or Supabase provider token"
+    ),
+) -> Optional[str]:
+    """Extract bearer token from incoming Authorization header to unlock 5,000 req/hr GitHub rate limit."""
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+        if token:
+            return token
+    return None
+
+
 def github_oauth_config() -> Dict[str, str]:
     client_id = os.getenv("GITHUB_CLIENT_ID", "").strip()
     client_secret = os.getenv("GITHUB_CLIENT_SECRET", "").strip()
@@ -413,8 +426,36 @@ def github_callback(
 
 @app.get("/api/auth/me")
 def auth_me(
+    bearer_token: Optional[str] = Depends(get_bearer_token),
     auth_context: Optional[AuthContext] = Depends(get_optional_auth),
+    db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
+    if bearer_token:
+        try:
+            profile_response = requests.get(
+                "https://api.github.com/user",
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "Authorization": f"Bearer {bearer_token}",
+                    "X-GitHub-Api-Version": API_VERSION,
+                    "User-Agent": "RevAudit-Statistical-Engine",
+                },
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            )
+            if profile_response.status_code == 200:
+                profile = profile_response.json()
+                user = get_or_create_user(db, profile)
+                return {
+                    "authenticated": True,
+                    "user": {
+                        "id": user.id if user else None,
+                        "github_id": profile.get("id"),
+                        "login": profile.get("login"),
+                        "avatar_url": profile.get("avatar_url"),
+                    },
+                }
+        except Exception:
+            pass
     if auth_context is None:
         return {"authenticated": False, "user": None}
     return {
@@ -441,10 +482,11 @@ def audit_repository(
     repo: str = Query(..., min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_.-]+$"),
     limit: int = Query(50, ge=1, le=200, description="Maximum number of recent PRs to include."),
     refresh: bool = Query(False, description="Skip the five-minute in-memory cache."),
+    bearer_token: Optional[str] = Depends(get_bearer_token),
     auth_context: Optional[AuthContext] = Depends(get_optional_auth),
 ):
-    token = auth_context.access_token if auth_context else os.getenv("GITHUB_TOKEN")
-    can_cache = auth_context is None
+    token = bearer_token or (auth_context.access_token if auth_context else None) or os.getenv("GITHUB_TOKEN")
+    can_cache = auth_context is None and bearer_token is None
     cache_key = (owner.lower(), repo.lower(), limit, bool(token))
     if can_cache and not refresh:
         cached = _cached(cache_key)

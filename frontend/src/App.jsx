@@ -15,7 +15,13 @@ import LandingPage from './components/LandingPage';
 import ContributorDashboard from './components/ContributorDashboard';
 import { ErrorState } from './components/States';
 import { FALLBACK_AUDIT_DATA } from './data/sampleAudits';
-import { apiUrl } from './lib/api';
+import { apiUrl, getAuthHeaders } from './lib/api';
+import { 
+  supabase, 
+  signInWithGitHub, 
+  signOut, 
+  setStoredGitHubToken 
+} from './lib/supabase';
 import { 
   GitPullRequest, 
   AlertTriangle, 
@@ -31,7 +37,11 @@ export default function App() {
   // Sync tab state with URL hash
   const getInitialTab = () => {
     if (typeof window !== 'undefined') {
-      const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
+      const rawHash = window.location.hash.replace(/^#\/?/, '');
+      if (rawHash.includes('access_token=') || rawHash.includes('provider_token=')) {
+        return 'overview';
+      }
+      const hash = rawHash.toLowerCase();
       if (['overview', 'contributor', 'analysis', 'patterns', 'methodology', 'presentation', 'ethics'].includes(hash)) {
         return hash;
       }
@@ -69,7 +79,12 @@ export default function App() {
   // Browser back/forward navigation sync
   useEffect(() => {
     const handleHashChange = () => {
-      const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
+      const rawHash = window.location.hash.replace(/^#\/?/, '');
+      if (rawHash.includes('access_token=') || rawHash.includes('provider_token=')) {
+        setActiveTab('overview');
+        return;
+      }
+      const hash = rawHash.toLowerCase();
       if (['overview', 'contributor', 'analysis', 'patterns', 'methodology', 'presentation', 'ethics'].includes(hash)) {
         setActiveTab(hash);
       } else if (hash === 'presentation' || hash === 'deck' || hash === 'slides') {
@@ -114,6 +129,7 @@ export default function App() {
       const liveUrl = apiUrl(`/api/audit?owner=${encodeURIComponent(parsed.owner)}&repo=${encodeURIComponent(parsed.repo)}`);
       let response = await fetch(liveUrl, {
         method: 'GET',
+        headers: getAuthHeaders(),
         credentials: 'include',
       }).catch(() => null);
 
@@ -143,7 +159,7 @@ export default function App() {
     try {
       const response = await fetch(apiUrl('/api/reports/pdf'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         credentials: 'include',
         body: JSON.stringify({
           owner: parsedActiveRepo.owner,
@@ -171,26 +187,90 @@ export default function App() {
     }
   };
 
-  const handleLogin = () => {
-    window.location.assign(apiUrl('/auth/github/login'));
+  const handleLogin = async () => {
+    try {
+      await signInWithGitHub();
+    } catch (loginErr) {
+      console.error('Sign-in failed:', loginErr);
+      setError(loginErr.message || 'GitHub sign-in initialization failed');
+    }
   };
 
   const handleLogout = async () => {
+    await signOut();
     await fetch(apiUrl('/api/auth/logout'), {
       method: 'POST',
+      headers: getAuthHeaders(),
       credentials: 'include',
     }).catch(() => null);
     setAuthUser(null);
   };
 
+  // Observe Supabase authentication session and capture GitHub provider token
   useEffect(() => {
-    fetch(apiUrl('/api/auth/me'), { credentials: 'include' })
+    if (supabase) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          if (session.provider_token) {
+            setStoredGitHubToken(session.provider_token);
+          }
+          const meta = session.user?.user_metadata || {};
+          const login = meta.user_name || meta.preferred_username || session.user?.email || 'authenticated';
+          setAuthUser({
+            login,
+            avatar_url: meta.avatar_url,
+            github_id: meta.provider_id,
+          });
+          if (window.location.hash.includes('access_token=')) {
+            window.history.replaceState(null, '', window.location.pathname + '#overview');
+            setActiveTab('overview');
+          }
+        }
+      }).catch(() => null);
+
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (session?.provider_token) {
+          setStoredGitHubToken(session.provider_token);
+        }
+        if (session?.user) {
+          const meta = session.user?.user_metadata || {};
+          const login = meta.user_name || meta.preferred_username || session.user?.email || 'authenticated';
+          setAuthUser({
+            login,
+            avatar_url: meta.avatar_url,
+            github_id: meta.provider_id,
+          });
+          if (event === 'SIGNED_IN') {
+            if (window.location.hash.includes('access_token=')) {
+              window.history.replaceState(null, '', window.location.pathname + '#overview');
+            }
+            setActiveTab('overview');
+          }
+        } else if (event === 'SIGNED_OUT') {
+          setAuthUser(null);
+          setStoredGitHubToken(null);
+        }
+      });
+
+      return () => {
+        subscription?.unsubscribe();
+      };
+    }
+  }, []);
+
+  // Sync with backend /api/auth/me forwarding the provider token
+  useEffect(() => {
+    fetch(apiUrl('/api/auth/me'), { 
+      headers: getAuthHeaders(),
+      credentials: 'include' 
+    })
       .then((response) => response.ok ? response.json() : null)
       .then((payload) => {
-        if (payload?.authenticated) setAuthUser(payload.user);
+        if (payload?.authenticated && payload.user) {
+          setAuthUser((prev) => ({ ...prev, ...payload.user }));
+        }
       })
       .catch(() => null);
-
   }, []);
 
   // Initial load
@@ -229,6 +309,9 @@ export default function App() {
         onNavigateToMethodology={() => handleNavigate('methodology')}
         onNavigateToPresentation={() => handleNavigate('presentation')}
         currentRepo={currentRepo}
+        authUser={authUser}
+        onLogin={handleLogin}
+        onLogout={handleLogout}
       />
     );
   }

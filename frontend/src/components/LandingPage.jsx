@@ -8,16 +8,29 @@ import {
   ExternalLink,
   Filter,
   Eye,
-  ChevronRight
+  ChevronRight,
+  LogOut,
+  Zap
 } from 'lucide-react';
 import iconSvgSrc from '../../../design/icon.svg';
+
+function GithubIcon({ className = "w-4 h-4" }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path fillRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clipRule="evenodd" />
+    </svg>
+  );
+}
 
 const heroVideoSrc = `${import.meta.env.BASE_URL}hero-background.mp4`;
 
 export default function LandingPage({ 
   onOpenAudit, 
   onNavigateToMethodology, 
-  onNavigateToPresentation 
+  onNavigateToPresentation,
+  authUser,
+  onLogin,
+  onLogout
 }) {
   const videoRef = useRef(null);
 
@@ -115,13 +128,47 @@ export default function LandingPage({
 
           {/* Nav Primary CTA */}
           <div className="flex items-center space-x-3">
-            <button
-              onClick={onOpenAudit}
-              className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white font-medium text-sm rounded-lg transition-all shadow-sm flex items-center space-x-1.5 cursor-pointer"
-            >
-              <span>Open Audit</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            {authUser ? (
+              <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-200">
+                  {authUser.avatar_url ? (
+                    <img src={authUser.avatar_url} alt="" className="w-4 h-4 rounded-full" />
+                  ) : null}
+                  <span>@{authUser.login}</span>
+                </div>
+                <button
+                  onClick={onLogout}
+                  title="Sign out"
+                  className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs transition-colors cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={onOpenAudit}
+                  className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white font-medium text-sm rounded-lg transition-all shadow-sm flex items-center space-x-1.5 cursor-pointer"
+                >
+                  <span>Open Audit</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={onLogin}
+                  className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-950 font-semibold text-sm rounded-lg transition-all shadow-sm flex items-center space-x-2 cursor-pointer"
+                  title="Sign in with GitHub via Supabase"
+                >
+                  <GithubIcon className="w-4 h-4" />
+                  <span>Sign in with GitHub</span>
+                </button>
+                <button
+                  onClick={onOpenAudit}
+                  className="hidden sm:flex px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-medium text-sm rounded-lg border border-slate-700/80 transition-all items-center space-x-1.5 cursor-pointer"
+                >
+                  <span>Demo</span>
+                </button>
+              </div>
+            )}
           </div>
 
         </nav>
@@ -149,21 +196,55 @@ export default function LandingPage({
             </p>
 
             {/* Action CTAs */}
-            <div className="flex flex-wrap items-center gap-3.5 pt-2">
-              <button
-                onClick={onOpenAudit}
-                className="px-6 py-3.5 bg-orange-600 hover:bg-orange-500 text-white font-medium text-sm sm:text-base rounded-lg transition-all shadow-lg flex items-center space-x-2 cursor-pointer"
-              >
-                <span>Open Audit</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
+            <div className="space-y-3 pt-2">
+              <div className="flex flex-wrap items-center gap-3.5">
+                {authUser ? (
+                  <button
+                    onClick={onOpenAudit}
+                    className="px-6 py-3.5 bg-orange-600 hover:bg-orange-500 text-white font-medium text-sm sm:text-base rounded-lg transition-all shadow-lg flex items-center space-x-2 cursor-pointer"
+                  >
+                    <span>Launch Audit Dashboard</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={onLogin}
+                      className="px-6 py-3.5 bg-white hover:bg-slate-100 text-slate-950 font-bold text-sm sm:text-base rounded-lg transition-all shadow-xl flex items-center space-x-2.5 cursor-pointer ring-2 ring-white/20"
+                    >
+                      <GithubIcon className="w-5 h-5" />
+                      <span>Sign in with GitHub</span>
+                    </button>
 
-              <button
-                onClick={onNavigateToMethodology}
-                className="px-6 py-3.5 bg-slate-900/80 hover:bg-slate-800 text-slate-200 hover:text-white font-medium text-sm sm:text-base rounded-lg border border-slate-700/80 backdrop-blur-sm transition-all cursor-pointer"
-              >
-                Explore Methodology
-              </button>
+                    <button
+                      onClick={onOpenAudit}
+                      className="px-6 py-3.5 bg-orange-600 hover:bg-orange-500 text-white font-medium text-sm sm:text-base rounded-lg transition-all shadow-lg flex items-center space-x-2 cursor-pointer"
+                    >
+                      <span>Explore Demo Audit</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
+
+                <button
+                  onClick={onNavigateToMethodology}
+                  className="px-6 py-3.5 bg-slate-900/80 hover:bg-slate-800 text-slate-200 hover:text-white font-medium text-sm sm:text-base rounded-lg border border-slate-700/80 backdrop-blur-sm transition-all cursor-pointer"
+                >
+                  Explore Methodology
+                </button>
+              </div>
+
+              {authUser ? (
+                <div className="flex items-center space-x-2 text-xs text-emerald-400 font-mono pt-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  <span>Active Session: @{authUser.login} • GitHub rate limit unlocked (5,000 requests/hour).</span>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-2 text-xs text-slate-400 font-mono pt-1">
+                  <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span>Sign in with GitHub via Supabase to permanently unlock 5,000 requests/hour and bypass anonymous IP throttling.</span>
+                </div>
+              )}
             </div>
           </div>
 
