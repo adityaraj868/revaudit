@@ -138,6 +138,9 @@ The extension does not inject content scripts or modify GitHub pages.
   on GitHub; revoke it from GitHub settings if needed.
 - The API receives the GitHub token only to query GitHub on your behalf; it is
   not stored in the database.
+- Render's server `GITHUB_TOKEN` should have only `public_repo`. Private repos
+  are accessed with the signed-in user's token, which takes precedence over the
+  server token for that request.
 - Public mode sends no credentials.
 
 ## Local development
