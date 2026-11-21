@@ -26,6 +26,7 @@ const authFeedback = document.getElementById('auth-feedback');
 // DOM Elements - Repo & Actions
 const ownerInput = document.getElementById('owner-input');
 const repoInput = document.getElementById('repo-input');
+const repoError = document.getElementById('repo-error');
 const auditBtn = document.getElementById('audit-btn');
 const detectTabBtn = document.getElementById('detect-tab-btn');
 const retryBtn = document.getElementById('retry-btn');
@@ -200,6 +201,19 @@ function updateAuthUI(auth) {
 }
 
 // ==========================================
+// Inline repository errors
+// ==========================================
+function setRepoError(message) {
+  repoError.textContent = message;
+  repoError.classList.remove('hidden');
+}
+
+function clearRepoError() {
+  repoError.textContent = '';
+  repoError.classList.add('hidden');
+}
+
+// ==========================================
 // Browser Tab Detection
 // ==========================================
 async function detectCurrentGitHubTab() {
@@ -214,6 +228,7 @@ async function detectCurrentGitHubTab() {
       const repo = match[2].replace(/\.git$/, '');
       ownerInput.value = owner;
       repoInput.value = repo;
+      clearRepoError();
       return true;
     }
   } catch (err) {
@@ -523,10 +538,11 @@ async function handleAuditSubmit() {
   const repo = repoInput.value.trim();
 
   if (!owner || !repo) {
-    alert('Please enter both owner and repository name.');
+    setRepoError('Enter both the owner and repository name.');
     return;
   }
 
+  clearRepoError();
   await performAudit(owner, repo);
 }
 
@@ -691,7 +707,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   detectTabBtn.addEventListener('click', async () => {
     const found = await detectCurrentGitHubTab();
     if (!found) {
-      alert('Active browser tab is not a GitHub repository page.');
+      setRepoError('This tab is not a GitHub repository. Open github.com/owner/repo or enter it above.');
     }
   });
 
@@ -699,6 +715,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     inp.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') handleAuditSubmit();
     });
+    inp.addEventListener('input', clearRepoError);
   });
 
   retryBtn.addEventListener('click', handleAuditSubmit);
