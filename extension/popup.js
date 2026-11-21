@@ -349,9 +349,10 @@ function renderResults(data) {
   statMedian.textContent = overallMedian == null ? '—' : formatHours(overallMedian);
   statAnomalies.textContent = data.anomalies_count ?? anomalies.length;
 
-  const authLabel =
-    metadata.github_authenticated === true
-      ? 'authenticated'
+  const authLabel = currentAuth && currentAuth.token
+    ? 'user token'
+    : metadata.github_authenticated === true
+      ? 'server token'
       : metadata.github_authenticated === false
         ? 'unauthenticated'
         : 'legacy response';
