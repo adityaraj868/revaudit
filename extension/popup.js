@@ -359,12 +359,15 @@ function renderResults(data) {
     const tagClass = cat.toLowerCase();
     const observed = info.event_count != null ? ` · ${info.event_count} observed` : '';
     const countText = `${sample === 1 ? '1 PR' : `${sample} PRs`}${observed}`;
+    const medianAvailable = sample > 0 && info.median_hours != null;
     const medianText =
-      sample > 0 && info.median_hours != null
-        ? formatHours(info.median_hours)
-        : info.estimate_status === 'median_not_reached'
-          ? 'Median not reached'
-          : 'No data';
+      sample === 0
+        ? 'No data'
+        : medianAvailable
+          ? formatHours(info.median_hours)
+          : info.estimate_status === 'median_not_reached'
+            ? 'Median not reached'
+            : 'No data';
     const interval = info.confidence_interval_95 || info.mock_ci_90;
     const intervalLabel = info.confidence_interval_95 ? '95% CI' : '90% CI';
     const ciText =
@@ -382,7 +385,7 @@ function renderResults(data) {
         <span class="cohort-count">${escapeHtml(countText)}</span>
       </div>
       <div class="cohort-stats">
-        <span class="cohort-median">${escapeHtml(medianText)}</span>
+        <span class="cohort-median ${medianAvailable ? '' : 'muted'}">${escapeHtml(medianText)}</span>
         <span class="cohort-ci">${escapeHtml(ciText)}</span>
       </div>
     `;
@@ -487,16 +490,22 @@ function renderResults(data) {
   warningsBox.hidden = warnings.length === 0;
   warningsBox.replaceChildren();
   if (warnings.length) {
+    const details = document.createElement('details');
+    details.className = 'warnings-details';
+    const summary = document.createElement('summary');
+    summary.textContent = `Data quality warnings (${warnings.length})`;
     const list = document.createElement('ul');
     warnings.slice(0, 4).forEach((warning) => {
       const li = document.createElement('li');
       li.textContent = warning;
       list.appendChild(li);
     });
-    warningsBox.appendChild(list);
+    details.append(summary, list);
+    warningsBox.appendChild(details);
   }
 
   setViewState('results');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function escapeHtml(str) {

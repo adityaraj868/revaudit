@@ -12,7 +12,7 @@ import {
   LogOut
 } from 'lucide-react';
 import { SAMPLE_REPOSITORIES } from '../data/sampleAudits';
-import iconSvgSrc from '../../../design/icon.svg';
+import logoMarkSrc from '../../../design/rev_audit_monogram.png';
 
 export default function TopHeader({ 
   activeTab, 
@@ -65,10 +65,10 @@ export default function TopHeader({
               className="hover:text-slate-200 transition-colors font-semibold text-white cursor-pointer flex items-center space-x-1.5"
             >
               <img 
-                src={iconSvgSrc || "/design/icon.svg"} 
+                src={logoMarkSrc || "/design/rev_audit_monogram.png"} 
                 alt="RevAudit Logo" 
-                className="w-4 h-4 invert opacity-60 object-contain"
-                onError={(e) => { e.target.src = '/icon.svg'; }}
+                className="w-6 h-6 object-contain"
+                onError={(e) => { e.target.src = '/design/rev_audit_monogram.png'; }}
               />
               <span>RevAudit</span>
             </button>
