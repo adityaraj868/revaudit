@@ -1,13 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "RevAudit — GitHub Review Auditor",
-  "version": "1.0.0",
-  "description": "Audits GitHub pull request review turnaround times, calculates cohort baselines, and flags review latency anomalies.",
+  "name": "RevAudit \u2014 GitHub Review Auditor",
+  "version": "1.1.0",
+  "description": "Audits GitHub pull request review turnaround with public guest mode and optional GitHub sign-in for private repos.",
   "permissions": [
     "activeTab",
     "tabs",
     "storage",
-    "identity"
+    "clipboardWrite"
   ],
   "host_permissions": [
     "https://api.github.com/*",
@@ -26,5 +26,8 @@
     "16": "icons/icon-16.png",
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
   }
 }

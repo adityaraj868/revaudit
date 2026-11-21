@@ -71,7 +71,7 @@ A standalone, zero-dependency Chrome extension is available in `extension/` for 
 1. Open `chrome://extensions/` in Chrome, Brave, or Edge.
 2. Toggle on **Developer mode** (top-right).
 3. Click **Load unpacked** (top-left) and select the `extension/` directory.
-4. Open any GitHub repository in your browser and click the **RevAudit** extension icon to audit PRs with zero auth/database requirements. See [`extension/README.md`](extension/README.md) for details.
+4. Open any GitHub repository and click the **RevAudit** icon. Public repositories work without login; sign in with GitHub OAuth Device Flow or a personal access token for private repositories and the 5,000 req/hr limit. See [`extension/README.md`](extension/README.md) for details.
 
 ### 5. Implementation walkthrough
 

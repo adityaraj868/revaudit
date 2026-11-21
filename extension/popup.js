@@ -23,6 +23,13 @@ const clientIdInput = document.getElementById('client-id-input');
 const oauthLoginBtn = document.getElementById('oauth-login-btn');
 const authFeedback = document.getElementById('auth-feedback');
 
+const devicePanel = document.getElementById('device-flow-panel');
+const deviceCode = document.getElementById('device-code');
+const deviceStatus = document.getElementById('device-flow-status');
+const copyDeviceBtn = document.getElementById('copy-device-code');
+const openDeviceBtn = document.getElementById('open-device-page');
+const cancelDeviceBtn = document.getElementById('cancel-device-flow');
+
 // DOM Elements - Repo & Actions
 const ownerInput = document.getElementById('owner-input');
 const repoInput = document.getElementById('repo-input');
@@ -51,6 +58,28 @@ const anomaliesCountBadge = document.getElementById('anomalies-count-badge');
 
 // Active Auth State in Memory
 let currentAuth = null;
+let deviceState = null;
+let devicePollTimer = null;
+
+function sendMessage(message) {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      if (!response) {
+        reject(new Error('No response from the extension background.'));
+        return;
+      }
+      if (!response.ok) {
+        reject(new Error(response.error || 'Extension action failed.'));
+        return;
+      }
+      resolve(response);
+    });
+  });
+}
 
 // ==========================================
 // View State Management
@@ -158,17 +187,17 @@ function updateAuthUI(auth) {
   } else {
     // Unauthenticated state
     authStatusBar.className = 'auth-bar unauthenticated';
-    authUsername.textContent = 'GitHub Guest';
-    headerAuthLabel.textContent = 'Sign In';
+    authUsername.textContent = 'Public mode';
+    headerAuthLabel.textContent = 'Sign in';
 
     userAvatar.classList.add('hidden');
     if (defaultGhIcon) defaultGhIcon.classList.remove('hidden');
 
     rateLimitBadge.className = 'badge-rate-limit low';
     rateLimitBadge.textContent = '60 req/hr';
-    rateLimitDetail.textContent = 'Connect GitHub to unlock 5,000 req/hr & private repos';
+    rateLimitDetail.textContent = 'Public repos only • Sign in for private repos & 5,000/hr';
 
-    authActionBtn.textContent = 'Connect';
+    authActionBtn.textContent = 'Sign in';
     authActionBtn.className = 'auth-pill-btn';
   }
 }
@@ -273,12 +302,12 @@ async function performAudit(owner, repo) {
     }
 
     if (response.status === 404) {
-      throw new Error(`Repository "${owner}/${repo}" was not found or is private.`);
+      throw new Error(`Repository "${owner}/${repo}" was not found. If it is private, sign in with GitHub first.`);
     } else if (response.status === 403) {
       if (remainingHeader === '0') {
         throw new Error('GitHub API rate limit (60/hr) exceeded. Click "Connect" above to sign in with GitHub for 5,000 calls/hr.');
       }
-      throw new Error('Access denied by GitHub API (HTTP 403). Ensure you have permission.');
+      throw new Error('Access denied by GitHub API (HTTP 403). Sign in with GitHub for private repositories, or retry after the rate limit resets.');
     } else if (!response.ok) {
       const errJson = await response.json().catch(() => ({}));
       throw new Error(errJson.message || `GitHub API error (HTTP ${response.status})`);
@@ -507,13 +536,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Check guest unauthenticated rate limit
     fetchRateLimit().then(guestLimit => {
       if (guestLimit) {
-        rateLimitDetail.textContent = `Unauthenticated: ${guestLimit.remaining} / ${guestLimit.limit} calls left (${formatResetTime(guestLimit.reset)})`;
+        rateLimitDetail.textContent = `Public mode • ${guestLimit.remaining}/${guestLimit.limit} calls left (${formatResetTime(guestLimit.reset)})`;
       }
     });
   }
 
-  if (stored.gh_client_id) {
-    clientIdInput.value = stored.gh_client_id;
+  const configuredClientId =
+    stored.gh_client_id ||
+    (window.REVAUDIT_CONFIG && window.REVAUDIT_CONFIG.GITHUB_CLIENT_ID) ||
+    '';
+  if (configuredClientId) {
+    clientIdInput.value = configuredClientId;
   }
 
   // 2. Tab Detection
@@ -528,6 +561,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (currentAuth && currentAuth.token) {
       // Disconnect
       await chrome.storage.local.remove(['gh_auth']);
+      sendMessage({ type: 'CANCEL_DEVICE_FLOW' }).catch(() => null);
+      stopDevicePolling();
+      renderDevicePanel(null);
       tokenInput.value = '';
       updateAuthUI(null);
     } else {
@@ -559,6 +595,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const authData = await verifyGitHubToken(rawToken);
       await chrome.storage.local.set({ gh_auth: authData });
+      sendMessage({ type: 'CANCEL_DEVICE_FLOW' }).catch(() => null);
+      stopDevicePolling();
+      renderDevicePanel(null);
       updateAuthUI(authData);
 
       authFeedback.className = 'auth-feedback success';
@@ -576,43 +615,147 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // 5. GitHub OAuth LaunchWebAuthFlow (Method 2)
-  oauthLoginBtn.addEventListener('click', async () => {
-    const clientId = clientIdInput.value.trim();
-    if (!clientId) {
-      authFeedback.className = 'auth-feedback error';
-      authFeedback.textContent = 'Please provide your GitHub OAuth App Client ID.';
+  // 5. GitHub OAuth Device Flow (Method 2)
+  function setDeviceStatus(kind, text) {
+    deviceStatus.className = 'device-flow-status' + (kind ? ` ${kind}` : '');
+    deviceStatus.textContent = text;
+  }
+
+  function stopDevicePolling() {
+    if (devicePollTimer) clearInterval(devicePollTimer);
+    devicePollTimer = null;
+  }
+
+  function renderDevicePanel(state) {
+    deviceState = state;
+    if (!state) {
+      devicePanel.classList.add('hidden');
       return;
     }
+    devicePanel.classList.remove('hidden');
+    deviceCode.textContent = state.user_code || '----';
+    if (state.status === 'pending') {
+      setDeviceStatus('', 'Waiting for authorization… You can close this popup, authorize on GitHub, and reopen it.');
+    } else if (state.status === 'authorized') {
+      setDeviceStatus('success', 'Authorized. Loading your GitHub profile…');
+    } else if (state.error) {
+      setDeviceStatus('error', state.error);
+    }
+  }
 
-    await chrome.storage.local.set({ gh_client_id: clientId });
-    const redirectUri = chrome.identity.getRedirectURL();
-
-    authFeedback.className = 'auth-feedback';
-    authFeedback.textContent = 'Opening GitHub login popup...';
-
-    const authUrl = `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=repo,read:user`;
-
+  async function refreshDeviceState() {
     try {
-      const redirectUrl = await chrome.identity.launchWebAuthFlow({
-        url: authUrl,
-        interactive: true
-      });
-
-      const urlObj = new URL(redirectUrl);
-      const code = urlObj.searchParams.get('code');
-
-      if (code) {
-        authFeedback.className = 'auth-feedback success';
-        authFeedback.textContent = 'GitHub authorized! Exchanging token...';
-        // Note: Direct browser token exchange requires client secret or backend proxy
-        // If user is running local backend, they can also use PAT for immediate 0-dependency connect
+      const response = await sendMessage({ type: 'GET_DEVICE_FLOW' });
+      const state = response.state;
+      if (!state) {
+        stopDevicePolling();
+        renderDevicePanel(null);
+        return;
       }
-    } catch (err) {
+      renderDevicePanel(state);
+      if (state.status === 'authorized') {
+        stopDevicePolling();
+        const storedAuth = await chrome.storage.local.get('gh_auth');
+        if (storedAuth.gh_auth) {
+          updateAuthUI(storedAuth.gh_auth);
+          authFeedback.className = 'auth-feedback success';
+          authFeedback.textContent = `Connected as @${storedAuth.gh_auth.username}!`;
+          setTimeout(() => {
+            authDrawer.classList.add('hidden');
+            authFeedback.textContent = '';
+          }, 1200);
+        }
+      } else if (['error', 'denied', 'expired'].includes(state.status)) {
+        stopDevicePolling();
+      }
+    } catch (error) {
+      setDeviceStatus('error', error.message);
+    }
+  }
+
+  function startDevicePolling() {
+    stopDevicePolling();
+    devicePollTimer = setInterval(refreshDeviceState, 2000);
+    refreshDeviceState();
+  }
+
+  oauthLoginBtn.addEventListener('click', async () => {
+    const defaultClientId = (window.REVAUDIT_CONFIG && window.REVAUDIT_CONFIG.GITHUB_CLIENT_ID) || '';
+    const clientId = (clientIdInput.value.trim() || defaultClientId).trim();
+    if (!clientId) {
       authFeedback.className = 'auth-feedback error';
-      authFeedback.textContent = 'OAuth canceled or redirect failed. Try using a Token above.';
+      authFeedback.textContent = 'Add a GitHub OAuth App Client ID first.';
+      return;
+    }
+    clientIdInput.value = clientId;
+    await chrome.storage.local.set({ gh_client_id: clientId });
+    oauthLoginBtn.disabled = true;
+    authFeedback.className = 'auth-feedback';
+    authFeedback.textContent = 'Requesting a GitHub device code…';
+    try {
+      const response = await sendMessage({
+        type: 'START_DEVICE_FLOW',
+        clientId,
+        scopes: (window.REVAUDIT_CONFIG && window.REVAUDIT_CONFIG.GITHUB_OAUTH_SCOPES) || 'repo read:user',
+      });
+      renderDevicePanel(response.state);
+      authFeedback.className = 'auth-feedback';
+      authFeedback.textContent = 'Copy the code, open GitHub, and authorize this extension.';
+      startDevicePolling();
+    } catch (error) {
+      authFeedback.className = 'auth-feedback error';
+      authFeedback.textContent = error.message;
+    } finally {
+      oauthLoginBtn.disabled = false;
     }
   });
+
+  copyDeviceBtn.addEventListener('click', async () => {
+    if (!deviceState?.user_code) return;
+    try {
+      await navigator.clipboard.writeText(deviceState.user_code);
+      copyDeviceBtn.textContent = 'Copied';
+      setTimeout(() => { copyDeviceBtn.textContent = 'Copy'; }, 1500);
+    } catch {
+      setDeviceStatus('error', 'Clipboard access failed. Select and copy the code manually.');
+    }
+  });
+
+  openDeviceBtn.addEventListener('click', () => {
+    if (!deviceState?.verification_uri) return;
+    chrome.tabs.create({ url: deviceState.verification_uri });
+  });
+
+  cancelDeviceBtn.addEventListener('click', async () => {
+    try {
+      await sendMessage({ type: 'CANCEL_DEVICE_FLOW' });
+    } catch {
+      // Ignore cancellation errors; hide the panel regardless.
+    }
+    stopDevicePolling();
+    renderDevicePanel(null);
+    authFeedback.className = 'auth-feedback';
+    authFeedback.textContent = 'Sign-in cancelled. Public mode is still available.';
+  });
+
+  // 5b. Resume a pending or completed device flow after the popup reopens.
+  try {
+    const storedFlow = await sendMessage({ type: 'GET_DEVICE_FLOW' });
+    if (storedFlow.state) {
+      renderDevicePanel(storedFlow.state);
+      if (storedFlow.state.status === 'pending') {
+        authDrawer.classList.remove('hidden');
+        startDevicePolling();
+      } else if (storedFlow.state.status === 'authorized') {
+        const storedAuth = await chrome.storage.local.get('gh_auth');
+        if (storedAuth.gh_auth) updateAuthUI(storedAuth.gh_auth);
+      } else if (storedFlow.state.error) {
+        authDrawer.classList.remove('hidden');
+      }
+    }
+  } catch {
+    // Background worker may not be awake yet; auth still works on demand.
+  }
 
   // 6. Action Handlers
   auditBtn.addEventListener('click', handleAuditSubmit);

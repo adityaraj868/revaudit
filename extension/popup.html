@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>RevAudit</title>
+  <link rel="icon" href="icons/icon-16.png">
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
@@ -56,16 +57,16 @@
 
       <div class="drawer-content">
         <p class="drawer-desc">
-          Unauthenticated requests to GitHub are capped at <strong>60 per hour</strong>. Authenticating with GitHub unlocks <strong>5,000 requests per hour</strong> and access to private repositories.
+          <strong>Public mode</strong> works without signing in (60 requests/hour). Sign in only for <strong>private repositories</strong>, <strong>5,000 requests/hour</strong>, and full PR history.
         </p>
 
         <!-- Method 1: Token Auth (Fastest & most reliable in browser extensions) -->
         <div class="auth-method-card">
           <div class="method-header">
-            <h4>Personal Access Token / Fine-Grained Token</h4>
-            <span class="badge-recommended">Recommended</span>
+            <h4>Personal access token or OAuth token</h4>
+            <span class="badge-recommended">Fastest</span>
           </div>
-          <p class="method-sub">Create a token on GitHub with <code>repo</code> or public access, then paste it below.</p>
+          <p class="method-sub">Paste a GitHub PAT or an OAuth access token with <code>repo</code> scope. Used only for GitHub API calls.</p>
           
           <div class="token-helper-row">
             <a href="https://github.com/settings/tokens/new?description=RevAudit+Browser+Extension&scopes=repo" target="_blank" rel="noopener" class="gh-link-btn">
@@ -84,18 +85,35 @@
           </div>
         </div>
 
-        <!-- Method 2: OAuth Web Authentication -->
+        <!-- Method 2: OAuth Device Flow -->
         <div class="auth-method-card oauth-card">
           <div class="method-header">
-            <h4>One-Click GitHub OAuth</h4>
-            <span class="badge-subtle">WebAuthFlow</span>
+            <h4>Sign in with GitHub</h4>
+            <span class="badge-subtle">OAuth Device Flow</span>
           </div>
-          <p class="method-sub">Sign in using a GitHub OAuth App Client ID (uses Chrome Identity API).</p>
+          <p class="method-sub">No client secret is stored in the extension. The OAuth App must have Device Flow enabled.</p>
           
           <div class="input-with-button">
             <input type="text" id="client-id-input" placeholder="OAuth Client ID (e.g. Ov23li...)" autocomplete="off" />
             <button id="oauth-login-btn" class="secondary-btn">Sign In</button>
           </div>
+        </div>
+
+        <div id="device-flow-panel" class="device-flow-panel hidden">
+          <div class="method-header">
+            <h4>Authorize on GitHub</h4>
+            <span class="badge-subtle">Device Flow</span>
+          </div>
+          <p class="method-sub">Enter this code at <a href="https://github.com/login/device" target="_blank" rel="noopener">github.com/login/device</a>:</p>
+          <div class="device-code-row">
+            <code id="device-code">----</code>
+            <button id="copy-device-code" class="secondary-btn">Copy</button>
+          </div>
+          <div class="device-flow-actions">
+            <button id="open-device-page" class="primary-btn">Open GitHub</button>
+            <button id="cancel-device-flow" class="secondary-btn">Cancel</button>
+          </div>
+          <p id="device-flow-status" class="device-flow-status">Waiting for authorization…</p>
         </div>
 
         <div id="auth-feedback" class="auth-feedback"></div>
@@ -221,11 +239,12 @@
 
     <!-- Footer -->
     <footer class="app-footer">
-      <span>RevAudit v1.0 • Academic SWE Project</span>
+      <span>RevAudit v1.1 • Public + OAuth</span>
       <a href="https://github.com/adityaraj868/revaudit" target="_blank" rel="noopener">GitHub</a>
     </footer>
   </div>
 
+  <script src="config.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
