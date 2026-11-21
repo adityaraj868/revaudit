@@ -3,11 +3,13 @@ from datetime import datetime, timezone
 from threading import Lock
 from time import time
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlsplit
+import json
 import os
 import re
 
 import requests
-from fastapi import Body, Depends, FastAPI, HTTPException, Query, Header
+from fastapi import BackgroundTasks, Body, Depends, FastAPI, HTTPException, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
@@ -21,9 +23,16 @@ from auth import (
     revoke_auth_session,
 )
 from database import Base, ensure_schema, engine, get_db
-from models import User
+from models import PullRequest, Repository, User
+from persistence import persist_audit_result
 from reporting import build_audit_pdf
 from statistical_engine import build_pull_request_record, finalize_analysis
+from webhooks import (
+    WebhookConfigurationError,
+    process_pull_request_event,
+    should_process,
+    verify_signature,
+)
 
 API_VERSION = "2022-11-28"
 REQUEST_TIMEOUT_SECONDS = 20
@@ -37,9 +46,16 @@ app = FastAPI(
     version="2.0.0",
 )
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+_parsed_frontend = urlsplit(frontend_url)
+frontend_origin = (
+    f"{_parsed_frontend.scheme}://{_parsed_frontend.netloc}"
+    if _parsed_frontend.scheme and _parsed_frontend.netloc
+    else frontend_url
+)
 allowed_origins = {
-    frontend_url,
+    frontend_origin,
     "http://localhost:5173",
+    "http://127.0.0.1:5173",
     "http://localhost:3000",
 }
 app.add_middleware(
@@ -49,13 +65,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Cross-site deployments (GitHub Pages -> Render) need SameSite=None cookies.
+# Browsers require Secure for SameSite=None, so this tracks COOKIE_SECURE.
+_secure_cookie = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 app.add_middleware(
     SessionMiddleware,
     secret_key=os.getenv("SESSION_SECRET", "dev-only-change-me"),
     session_cookie="revaudit_session",
     max_age=60 * 60 * 24 * 30,
-    same_site="lax",
-    https_only=os.getenv("COOKIE_SECURE", "false").lower() == "true",
+    same_site="none" if _secure_cookie else "lax",
+    https_only=_secure_cookie,
 )
 
 # Initialize new deployments and apply additive changes to existing databases.
@@ -332,6 +351,9 @@ def root():
             "github_oauth": "/auth/github/login",
             "pagination": True,
             "reviewer_workload": True,
+            "workload_threshold": True,
+            "persistence": "/api/history?owner={owner}&repo={repo}",
+            "webhook": "/api/webhook/github",
             "pdf_export": "/api/reports/pdf",
         },
     }
@@ -478,6 +500,7 @@ def auth_logout(request: Request, db: Session = Depends(get_db)) -> Dict[str, bo
 
 @app.get("/api/audit")
 def audit_repository(
+    background_tasks: BackgroundTasks,
     owner: str = Query(..., min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_.-]+$"),
     repo: str = Query(..., min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_.-]+$"),
     limit: int = Query(50, ge=1, le=200, description="Maximum number of recent PRs to include."),
@@ -499,7 +522,143 @@ def audit_repository(
         raise HTTPException(status_code=exc.status_code, detail=exc.detail)
     if can_cache and not result["metadata"]["partial"]:
         _put_cache(cache_key, result)
+    if (
+        result.get("pull_requests")
+        and os.getenv("PERSIST_AUDITS", "true").lower() != "false"
+    ):
+        # Keep the HTTP response fast; the relational mirror is not required to
+        # render the dashboard.
+        background_tasks.add_task(persist_audit_result, result)
     return result
+
+
+def _serialize_persisted_pr(row: PullRequest) -> Dict[str, Any]:
+    return {
+        "pr_number": row.pr_number,
+        "title": row.title,
+        "author": row.author.login if row.author else None,
+        "state": row.state,
+        "size_category": row.size_category,
+        "body_length": row.body_length,
+        "additions": row.additions,
+        "deletions": row.deletions,
+        "files_changed": row.changed_files,
+        "html_url": row.html_url,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "merged_at": row.merged_at.isoformat() if row.merged_at else None,
+        "closed_at": row.closed_at.isoformat() if row.closed_at else None,
+        "first_review_at": row.first_review_at.isoformat() if row.first_review_at else None,
+        "time_to_first_review_hours": row.time_to_first_review_hours,
+        "reviewer_login": row.reviewer_login,
+        "reviewer_queue_at_creation": row.reviewer_queue_at_creation,
+        "dynamic_threshold_ratio": row.dynamic_threshold_ratio,
+        "dynamic_threshold_hours": row.dynamic_threshold_hours,
+        "workload_ratio_to_median": row.workload_ratio_to_median,
+        "is_workload_anomaly": bool(row.is_workload_anomaly),
+        "is_anomaly": bool(row.is_anomaly),
+        "review_count": row.review_count,
+        "review_rounds": row.review_rounds,
+        "reviews": [
+            {
+                "reviewer": event.reviewer.login if event.reviewer else None,
+                "state": event.state,
+                "submitted_at": event.submitted_at.isoformat() if event.submitted_at else None,
+            }
+            for event in sorted(
+                row.reviews,
+                key=lambda event: event.submitted_at.isoformat()
+                if event.submitted_at
+                else "",
+            )
+        ],
+    }
+
+
+@app.get("/api/history")
+def audit_history(
+    owner: str = Query(..., min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_.-]+$"),
+    repo: str = Query(..., min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_.-]+$"),
+    limit: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """Read the persisted historical mirror of previous audits and webhooks."""
+    repository = (
+        db.query(Repository)
+        .filter(Repository.owner == owner, Repository.name == repo)
+        .first()
+    )
+    if repository is None:
+        return {
+            "owner": owner,
+            "repo": repo,
+            "stored": False,
+            "pull_requests": [],
+            "stored_prs_count": 0,
+        }
+
+    rows = (
+        db.query(PullRequest)
+        .filter(PullRequest.repo_id == repository.id)
+        .order_by(PullRequest.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return {
+        "owner": owner,
+        "repo": repo,
+        "stored": True,
+        "last_synced_at": repository.last_synced_at.isoformat()
+        if repository.last_synced_at
+        else None,
+        "stored_prs_count": db.query(PullRequest)
+        .filter(PullRequest.repo_id == repository.id)
+        .count(),
+        "pull_requests": [_serialize_persisted_pr(row) for row in rows],
+    }
+
+
+@app.post("/api/webhook/github")
+async def github_webhook(
+    request: Request, background_tasks: BackgroundTasks
+) -> Dict[str, Any]:
+    """Receive a GitHub webhook, verify its HMAC, and ingest in the background."""
+    raw_body = await request.body()
+    try:
+        valid = verify_signature(
+            raw_body, request.headers.get("X-Hub-Signature-256")
+        )
+    except WebhookConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if not valid:
+        raise HTTPException(status_code=401, detail="Invalid webhook signature.")
+
+    event_type = request.headers.get("X-GitHub-Event")
+    try:
+        payload = json.loads(raw_body.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload.") from exc
+
+    if event_type == "ping":
+        return {"ok": True, "pong": True}
+
+    action = payload.get("action")
+    if not should_process(event_type, action):
+        return {
+            "ok": True,
+            "ignored": True,
+            "event": event_type,
+            "action": action,
+        }
+
+    pull_request = payload.get("pull_request") or {}
+    background_tasks.add_task(process_pull_request_event, payload)
+    return {
+        "ok": True,
+        "queued": True,
+        "event": event_type,
+        "action": action,
+        "pr_number": pull_request.get("number"),
+    }
 
 
 @app.post("/api/reports/pdf")

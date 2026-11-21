@@ -32,8 +32,10 @@ export default function TopHeader({
 
   const getBreadcrumbTitle = () => {
     switch (activeTab) {
-      case 'overview': return 'Reviewer Dashboard';
+      case 'overview': return 'Repository Overview';
+      case 'reviewer': return 'Reviewer Triage';
       case 'contributor': return 'Contributor Dashboard';
+      case 'manager': return 'Manager Report';
       case 'analysis': return 'Review Analysis';
       case 'patterns': return 'Detected Patterns';
       case 'methodology': return 'Methodology & UML';
@@ -44,7 +46,7 @@ export default function TopHeader({
   };
 
   return (
-    <header className="sticky top-0 z-20 bg-slate-900 border-b border-slate-800 font-sans">
+    <header className="no-print sticky top-0 z-20 bg-slate-900 border-b border-slate-800 font-sans">
       <div className="px-4 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between gap-4">
         
         {/* Left: Mobile Toggle & Breadcrumbs */}

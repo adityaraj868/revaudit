@@ -142,3 +142,21 @@ class GitHubClient:
                 f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/reviews"
             )
         )
+
+    def get_pull_request(self, owner: str, repo: str, pr_number: int) -> Dict[str, Any]:
+        """Fetch the full pull request payload, including additions/deletions."""
+        response = self._get(
+            f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}"
+        )
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise GitHubAPIError("GitHub returned an unexpected pull request payload.")
+        return payload
+
+    def list_timeline(self, owner: str, repo: str, pr_number: int) -> List[Dict[str, Any]]:
+        """Fetch issue timeline events, including review and request events."""
+        return list(
+            self.paginate(
+                f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/timeline"
+            )
+        )

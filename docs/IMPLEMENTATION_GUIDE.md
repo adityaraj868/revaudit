@@ -126,67 +126,92 @@ The client handles:
 - network failures
 - malformed/non-list responses
 
-## 6. Store review events
+## 6. Persist audits and ingest webhooks
 
-For merged PRs, the backend fetches `/pulls/{number}/reviews` and upserts each
-review into `review_events`. The sync is idempotent by GitHub review ID, and
-`reviews_synced_at` records which PRs have already been checked.
+The analysis endpoint is stateless, so a completed audit is mirrored into the
+database after the response is sent. `backend/persistence.py` upserts the
+repository, authors, reviewers, pull requests, and review events; repeated
+persistence is idempotent by PR number and review identity. Set
+`PERSIST_AUDITS=false` to disable the mirror.
 
-Why: pull-request metadata tells us when a PR merged, but it does not tell us
-who reviewed it, when the first review happened, or how many review rounds took
-place. Those values are required for workload analysis.
+`POST /api/webhook/github` verifies `X-Hub-Signature-256` with
+`GITHUB_WEBHOOK_SECRET`, acknowledges the delivery immediately, and schedules
+`pull_request.closed` ingestion with FastAPI's native `BackgroundTasks`.
+`backend/webhooks.py` fetches the PR detail, timeline, and reviews with
+`GITHUB_TOKEN`, normalizes them with the same record builder as the audit
+engine, and upserts the result.
+
+`GET /api/history?owner=&repo=` returns the persisted mirror, including review
+events and the workload-adjusted fields.
+
+Why: webhooks avoid making the browser wait for a full audit and keep a
+historical record for later comparisons.
+
+Relevant files:
+
+- `backend/persistence.py`
+- `backend/webhooks.py`
+- `backend/main.py`
 
 ## 7. Calculate reviewer workload
 
-For each review event, RevAudit counts the reviewer's other PRs that:
+Two complementary measures are reported:
 
-1. were previously reviewed by that reviewer, and
-2. were still open when the current review was submitted.
+1. **Recent activity proxy** (`reviewer_activity_7d`): the number of sampled
+   human review events submitted by the eventual first reviewer in the seven
+   days before the first review.
+2. **Active queue at creation** (`reviewer_queue_at_creation`): other sampled
+   PRs that were still open at this PR's ready-for-review time and already had
+   an explicit `review_requested` timeline event for the eventual first
+   reviewer.
 
-The first review event on each merged PR supplies:
+The workload-adjusted rule is:
 
-- first-review timestamp
-- time to first review
-- first reviewer
-- concurrent workload snapshot
-- total review count
-- review rounds, represented by distinct review dates
+```text
+Dynamic_Threshold = 1.5 + (0.15 × active_prs_in_queue)
+```
 
-Why: this is a transparent queue-congestion proxy. It avoids claiming that
-GitHub's public review history is a perfect record of formal assignments while
-still measuring whether a reviewer was carrying other active review work.
+The rule is applied per cohort median and exported as `workload_engine` and
+`workload_anomalies`. It is additive to the robust residual model, so both
+signals remain visible. `request_coverage_pct` states how many evaluated PRs
+had explicit review-request evidence; low coverage is surfaced as a warning.
 
-The response includes `workload_summary` with average workload, maximum
-workload, sample size, review-event count, correlation with first-review delay,
-and the fitted hours-per-concurrent-PR slope.
+Why: raw review duration mixes complexity with queue pressure. The rule widens
+allowances for busy reviewers while keeping the strict 1.5× baseline for empty
+queues, without claiming access to GitHub's private assignment state.
 
-Relevant file: `backend/analytics.py`.
+## 8. Statistical model
 
-## 8. Preserve the size-controlled anomaly model
+`backend/statistical_engine.py` is the source of truth:
 
-The existing statistical pipeline remains:
+1. Build one record per sampled PR, preserving open and closed-unmerged PRs as
+   right-censored observations.
+2. Exclude bot authors from cohort and model estimates.
+3. Classify by changed lines and files (Small/Medium/Large/Unknown).
+4. Estimate cohort medians with Kaplan–Meier and a percentile bootstrap 95%
+   interval when at least 10 records and 5 events are available.
+5. Fit a Huber robust regression of `log1p(first-review hours)` on churn, files,
+   first-time contributor status, and prior-7-day reviewer activity.
+6. Flag `|robust z| ≥ 2.5` as a process triage signal in either direction.
+7. Apply the workload-adjusted ratio threshold as a second, independent signal.
 
-1. discard unmerged PRs from completed-review analysis;
-2. calculate `merged_at - created_at` in hours;
-3. classify by description length: Small, Medium, Large;
-4. calculate a cohort median and mock 90% confidence interval;
-5. flag review time above `1.5 × cohort median`.
-
-Why: reviewer workload is an additional explanatory signal, not a reason to
-remove the project's original size control. Keeping both fields in the payload
-lets the UI and later modeling compare complexity and queue pressure together.
+Both signals are triage aids, not quality or performance judgments.
 
 ## 9. Export a PDF audit report
 
-The frontend posts the current audit payload to `POST /api/reports/pdf`.
+The frontend can post the current audit payload to `POST /api/reports/pdf`.
 `backend/reporting.py` renders:
 
-- repository summary
-- merged/unmerged counts
-- workload summary
-- size-controlled baselines
-- flagged anomaly table
-- workload definition
+- repository and audit metadata
+- PR / merged / first-review / censoring counts
+- size-controlled baseline matrix with 95% intervals
+- robust adjusted triage signals
+- workload-adjusted threshold matrix
+- workload snapshot and interpretation notes
+
+The manager dashboard also offers a browser-native print path using
+`@media print`, which hides application chrome and renders the report on a white
+sheet. The ReportLab endpoint remains available for payload-based downloads.
 
 Why: managers and reviewers need a portable artifact that preserves the exact
 analysis shown in the dashboard.
@@ -212,18 +237,64 @@ The API is available at `http://localhost:8000/docs` and the UI at
 The feature smoke checks cover:
 
 - Link-header pagination and sync stopping
-- PR/review persistence and workload calculation
+- audit persistence idempotency and historical reads
+- webhook HMAC verification and event filtering
+- workload-adjusted threshold arithmetic and queue reconstruction
 - encrypted OAuth session creation/resolution/revocation
-- PDF output beginning with a valid `%PDF` header
-- frontend production build
+- PDF output for both v2 and legacy payloads
+- frontend production build and route rendering
 
 ## 11. Current limitations
 
 - OAuth requires a real GitHub OAuth application and deployment secrets.
 - Review workload is an inferred queue proxy, not GitHub's private assignment
-  state.
-- Review fetching is bounded by `GITHUB_REVIEW_MAX_PRS` to control API usage.
-- Confidence intervals retain the project's prototype “mock CI” calculation and
-  should be replaced with a statistically validated estimator before production
-  decisions.
+  state. `request_coverage_pct` reports how much explicit review-request
+  evidence was available.
+- Webhook ingestion handles `pull_request.closed` only and uses `GITHUB_TOKEN`
+  for follow-up REST calls; GitHub App installation tokens and delivery retries
+  are not implemented.
+- Review fetching is bounded by the audit `limit` and `GITHUB_REVIEW_MAX_PRS` to
+  control API usage.
+- Bootstrap intervals are shown only when cohort size and event support are
+  sufficient; otherwise the estimate is explicitly marked unavailable.
 - PDF export requires the ReportLab dependency from `backend/requirements.txt`.
+- Local development defaults to SQLite; production should use the pooled Neon
+  or Supabase PostgreSQL URL.
+
+## 12. Role-based frontend routes
+
+The frontend now uses `react-router-dom` with `HashRouter`, which keeps deep
+links working on GitHub Pages without a server rewrite rule.
+
+- `#/reviewer` — Smart Triage Queue. PRs are ordered Small → Medium → Large →
+  Unknown, then oldest open item first. Small cohorts are pinned to encourage
+  rapid unblocking.
+- `#/contributor` — contributor lookup, currently active PRs, and the Complexity
+  Coach. The coach warns when a draft description crosses the 1,000-character
+  Large-cohort threshold.
+- `#/manager` — print-ready manager report. `Print / Save as PDF` uses the
+  browser print dialog; `@media print` hides navigation and renders the report
+  on a white sheet.
+
+`RequireAuth` guards the three role routes. It accepts a Supabase or backend
+GitHub session, and offers an explicitly labelled, session-scoped demo mode when
+OAuth credentials are not configured. Role selection is route-based; it does not
+claim to enforce organisation-level authorization, which remains future work.
+
+## 13. Deployment topology
+
+Production runs the frontend on GitHub Pages and the API on Render:
+
+- **Supabase**: GitHub OAuth provider, URL allowlist for
+  `https://adityaraj868.github.io/revaudit/**`, and the Postgres database used by
+  `DATABASE_URL`.
+- **Render**: `render.yaml` service `revaudit-backend`; set `FRONTEND_URL` to the
+  full Pages URL (`https://adityaraj868.github.io/revaudit`), `COOKIE_SECURE=true`,
+  `GITHUB_WEBHOOK_SECRET`, and the Postgres connection string.
+- **GitHub Pages**: `.github/workflows/deploy-frontend.yml` builds with
+  `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, and the
+  `VITE_SUPABASE_ANON_KEY` repository secret. The workflow deploys from `main`.
+- **Webhook**: `https://revaudit-backend.onrender.com/api/webhook/github` with
+  the same secret used by Render.
+
+See the Deployment section in `README.md` for the step-by-step setup.

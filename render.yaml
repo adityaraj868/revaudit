@@ -23,3 +23,7 @@ services:
         sync: false
       - key: COOKIE_SECURE
         value: "true"
+      - key: GITHUB_WEBHOOK_SECRET
+        sync: false
+      - key: PERSIST_AUDITS
+        value: "true"

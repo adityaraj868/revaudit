@@ -3,11 +3,10 @@ name: Deploy Frontend to GitHub Pages
 on:
   push:
     branches:
-      # We are running this on the sparsh-1704 branch since that's what we have checked out.
-      # You can change this to 'main' when you merge it.
-      - sparsh-1704
+      - main
     paths:
       - 'frontend/**'
+      - '.github/workflows/deploy-frontend.yml'
   workflow_dispatch:
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
@@ -27,6 +26,12 @@ jobs:
     defaults:
       run:
         working-directory: frontend
+    env:
+      # Vite inlines these at build time. The anon key is public, but keeping it
+      # as a repository secret avoids duplicating it in source.
+      VITE_API_BASE_URL: https://revaudit-backend.onrender.com
+      VITE_SUPABASE_URL: https://lrusoisispsqutkiaqrv.supabase.co
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

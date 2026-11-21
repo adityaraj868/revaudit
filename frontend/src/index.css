@@ -50,3 +50,93 @@
 .animate-fade-in {
   animation: fadeIn 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* ---------------------------------------------------------------------------
+ * Manager report printing (Phase 4)
+ * Hides application chrome and renders the report on a clean white sheet so
+ * the browser print dialog can produce a professional PDF without ReportLab.
+ * ------------------------------------------------------------------------ */
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .no-print,
+  .no-print * {
+    display: none !important;
+  }
+
+  .app-shell {
+    display: block !important;
+    min-height: auto !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  .app-main {
+    max-width: none !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .manager-report,
+  .manager-report * {
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  .manager-report section,
+  .manager-report article,
+  .manager-report .print-surface {
+    background: #ffffff !important;
+  }
+
+  .manager-report [class*='bg-'] {
+    background-color: transparent !important;
+  }
+
+  .manager-report table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  .manager-report th {
+    background-color: #e2e8f0 !important;
+    color: #0f172a !important;
+  }
+
+  .manager-report th,
+  .manager-report td {
+    border-color: #cbd5e1 !important;
+    padding: 5px 6px !important;
+  }
+
+  .manager-report a {
+    color: #1d4ed8 !important;
+    text-decoration: none !important;
+  }
+
+  .manager-report .print-muted {
+    color: #475569 !important;
+  }
+
+  .manager-report section,
+  .manager-report tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

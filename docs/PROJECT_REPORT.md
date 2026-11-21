@@ -41,45 +41,50 @@ Pull request turnaround in empirical software engineering exhibits high variance
 
 ## 2. Statistical & Mathematical Methodology
 
-The statistical engine in RevAudit executes a five-stage analytical pipeline:
+The statistical engine in RevAudit executes a censoring-aware analytical pipeline:
 
 ```
-[Raw GitHub PRs] ──> [Imputation / Cleaning] ──> [Size Stratification] ──> [Median & CI90] ──> [1.5x Anomaly Flagging]
+[Raw GitHub PRs] ─> [Timeline & Review Events] ─> [Right-Censoring] ─> [Scope Cohorts]
+       ─> [Kaplan–Meier & Bootstrap 95% CI] ─> [Robust + Workload Triage] ─> [Persistence & Reporting]
 ```
 
-### 2.1 Survival Bias Correction (Imputation)
-Pull requests that are closed without being merged represent rejected proposals, duplicate work, or abandoned experiments. Incorporating their turnaround times distorts true code integration latency. The engine filters out non-merged pull requests:
-$$\mathcal{D}_{\text{merged}} = \{ \text{PR}_i \in \mathcal{D}_{\text{raw}} \mid \text{merged\_at}_i \neq \text{null} \}$$
+### 2.1 Survival Bias Correction (Censoring)
+Open pull requests that have not received a first human review are not discarded. They are **right-censored** at the audit timestamp, and closed-unmerged PRs are censored at closure. Censored observations contribute exposure time without being treated as completed review events:
+$$\mathcal{D}_{\text{censored}} = \{ \text{PR}_i \mid \text{first\_review}_i = \text{null} \}$$
 
 ### 2.2 Review Effort Latency Calculation
-For every merged PR, the total review duration in hours $\Delta t_i$ is computed:
-$$\Delta t_i = \frac{\text{Timestamp}(\text{merged\_at}_i) - \text{Timestamp}(\text{created\_at}_i)}{3600\text{ seconds}}$$
+The primary outcome is **time to first human review** (queue latency), measured from review eligibility:
+$$\Delta t_i = \frac{\text{Timestamp}(\text{first\_human\_review}_i) - \text{Timestamp}(\text{eligible\_at}_i)}{3600\text{ seconds}}$$
+For draft PRs, `eligible_at` is the first `ready_for_review` event; otherwise it is `created_at`. Bot authors and bot reviewers are excluded from cohort and model estimates.
 
-### 2.3 PR Complexity Stratification (Proxy Heuristic)
-Because summary REST API responses do not expose detailed line additions and deletions without secondary per-PR queries, RevAudit uses description character length ($L_{\text{body}}$) as an immediate proxy for architectural complexity:
-$$\text{Cohort}(\text{PR}_i) = \begin{cases} 
-\text{Small} & \text{if } L_{\text{body}} < 250\text{ chars} \\
-\text{Medium} & \text{if } 250 \le L_{\text{body}} < 1000\text{ chars} \\
-\text{Large} & \text{if } L_{\text{body}} \ge 1000\text{ chars}
+### 2.3 PR Complexity Stratification
+Ratings are based on the PR diff, not description length:
+$$\text{Cohort}(\text{PR}_i) = \begin{cases}
+\text{Small} & \text{churn} \le 100 \text{ and files} \le 5 \\
+\text{Medium} & \text{churn} \le 1000 \text{ and files} \le 20 \\
+\text{Large} & \text{above either medium cutoff} \\
+\text{Unknown} & \text{diff metadata unavailable}
 \end{cases}$$
+where $\text{churn} = \text{additions} + \text{deletions}$. The Complexity Coach in the contributor dashboard separately uses the 1,000-character description threshold as drafting guidance only.
 
 ### 2.4 Non-Parametric Central Tendency
-For each cohort $C \in \{\text{Small}, \text{Medium}, \text{Large}\}$, the baseline turnaround is established using the median ($\tilde{x}_C$):
-$$\tilde{x}_C = \text{Median}\left(\{ \Delta t_i \mid \text{PR}_i \in C \}\right)$$
-The median is chosen because it has a breakdown point of 50%, guaranteeing robustness against extreme outliers.
+For each cohort $C \in \{\text{Small}, \text{Medium}, \text{Large}, \text{Unknown}\}$, the baseline is the **Kaplan–Meier median** first-review latency, which remains valid under right-censoring. The median is chosen because it has a breakdown point of 50%, guaranteeing robustness against extreme outliers.
 
-### 2.5 90% Confidence Interval Estimation
-To capture sampling uncertainty while controlling for cohort sample size ($n_C$) and cohort standard deviation ($s_C$), a 90% confidence interval ($CI_{90}$) is derived using the standard error of the median:
-$$CI_{90}(C) = \left[ \max\left(0,\; \tilde{x}_C - 1.645 \cdot \frac{s_C}{\sqrt{n_C}}\right),\; \tilde{x}_C + 1.645 \cdot \frac{s_C}{\sqrt{n_C}} \right]$$
+### 2.5 Bootstrap 95% Confidence Interval
+When a cohort has at least 10 observations and 5 observed events, a percentile bootstrap over 500 resamples of the Kaplan–Meier median produces a non-parametric 95% interval:
+$$CI_{95}(C) = \left[\text{percentile}_{2.5}(\hat{\tilde{x}}_C),\; \text{percentile}_{97.5}(\hat{\tilde{x}}_C)\right]$$
+If support is insufficient, the interval is reported as unavailable rather than fabricated.
 
-### 2.6 The 1.5× Anomaly Multiplier Heuristic
-An individual pull request $\text{PR}_i$ belonging to cohort $C$ is flagged as an anomaly if its review duration exceeds 1.5 times the median of its cohort:
-$$\text{IsAnomaly}(\text{PR}_i) = \begin{cases} 
-\text{True} & \text{if } \Delta t_i > 1.5 \times \tilde{x}_C \\
-\text{False} & \text{otherwise}
-\end{cases}$$
-The **Variance Ratio** $\mathcal{R}_i$ is computed to quantify the magnitude of deviation:
-$$\mathcal{R}_i = \frac{\Delta t_i}{\tilde{x}_C}$$
+### 2.6 Robust and Workload-Adjusted Triage
+RevAudit reports two complementary process signals.
+
+**Robust residual model.** A Huber robust regression predicts $\log(1 + \Delta t_i)$ from change churn, files changed, first-time contributor status, and prior-7-day reviewer activity. Standardized residuals with $|z| \ge 2.5$ are triaged in either direction (slower or faster than expected).
+
+**Workload-adjusted threshold.** The Phase 3 rule reconstructs the reviewer's active queue from explicit `review_requested` events:
+$$\text{Dynamic\_Threshold}_i = 1.5 + 0.15 \cdot Q_i$$
+where $Q_i$ is the number of other sampled PRs still open at this PR's ready-for-review time and already waiting on the eventual first reviewer. The threshold in hours is $\text{Dynamic\_Threshold}_i \times \tilde{x}_{C(i)}$. The **Variance Ratio** remains:
+$$\mathcal{R}_i = \frac{\Delta t_i}{\tilde{x}_{C(i)}}$$
+Both signals are triage aids for process investigation, not judgments of review quality or individual performance.
 
 ---
 
@@ -191,27 +196,37 @@ The live prototype was executed against the official repository of the FastAPI f
 
 ---
 
-## 7. Phase 2 Implementation and Remaining Production Work
+## 7. Phase 2–4 Implementation and Remaining Production Work
 
-The implementation now includes the first Phase 2 features that were previously
-represented only in the architecture diagrams:
+The implementation now includes the production-oriented upgrades that were
+previously represented only in the architecture diagrams and upgrade plan:
 
-1. **Persistent relational storage:** Neon-compatible SQLAlchemy models store
-   repositories, users, pull requests, review events, and encrypted OAuth
-   sessions.
+1. **Persistent relational storage:** SQLAlchemy models store repositories,
+   users, pull requests, review events, workload-adjusted fields, and encrypted
+   OAuth sessions. Completed audits and webhook deliveries are mirrored into
+   the database, and `GET /api/history` serves the historical record.
 2. **Paginated ingestion:** GitHub `Link` headers are followed up to a bounded
    page limit, with incremental stopping at the last repository sync.
 3. **GitHub OAuth:** The FastAPI callback validates OAuth state, encrypts the
    access token server-side, and exposes session state to the frontend.
-4. **Reviewer workload modeling:** Review events are used to estimate the
-   number of other open PRs previously reviewed by the first reviewer.
-5. **PDF export:** The current audit payload can be rendered as a downloadable
-   ReportLab PDF.
+4. **Webhook ingestion:** `POST /api/webhook/github` verifies HMAC-SHA256 and
+   processes `pull_request.closed` events with FastAPI `BackgroundTasks`.
+5. **Censoring-aware statistics:** Kaplan–Meier medians, bootstrap 95%
+   confidence intervals, and Huber robust residual triage replace the early
+   mock-confidence-interval prototype.
+6. **Workload-adjusted thresholds:** The Phase 3 rule
+   `1.5 + (0.15 × active_prs_in_queue)` is reported alongside the robust
+   residual model, with explicit review-request coverage.
+7. **Role-based dashboards:** Protected reviewer, contributor, and manager
+   routes provide a smart triage queue, a complexity coach, and a print-ready
+   manager report.
+8. **Reporting:** The audit payload can be exported through the ReportLab
+   endpoint or printed natively from the manager dashboard.
 
-Remaining production work includes asynchronous webhook ingestion for very large
-repositories, a statistically validated confidence-interval estimator, stronger
-authorization policy for multi-user organizations, and load/performance testing
-against large real-world histories.
+Remaining production work includes organisation-level authorization (role
+claims rather than route selection), GitHub App installation tokens and webhook
+delivery retries, and load/performance testing against large real-world
+histories.
 
 ---
 

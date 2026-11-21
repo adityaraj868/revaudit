@@ -10,6 +10,7 @@ import {
   ExternalLink,
   PanelLeftClose,
   PanelLeftOpen,
+  Scale,
   UserRound
 } from 'lucide-react';
 import iconSvgSrc from '../../../design/icon.svg';
@@ -20,14 +21,26 @@ export default function Sidebar({ activeTab, onNavigate, anomaliesCount = 0, cur
   const navItems = [
     {
       id: 'overview',
-      label: 'Reviewer Dashboard',
+      label: 'Repository Overview',
       icon: Activity,
+      badge: null
+    },
+    {
+      id: 'reviewer',
+      label: 'Reviewer Triage',
+      icon: GitPullRequest,
       badge: null
     },
     {
       id: 'contributor',
       label: 'Contributor Dashboard',
       icon: UserRound,
+      badge: null
+    },
+    {
+      id: 'manager',
+      label: 'Manager Report',
+      icon: Scale,
       badge: null
     },
     {
@@ -63,7 +76,7 @@ export default function Sidebar({ activeTab, onNavigate, anomaliesCount = 0, cur
   ];
 
   return (
-    <aside className={`${collapsed ? 'w-16' : 'w-60'} bg-slate-900 border-r border-slate-800 flex flex-col h-screen sticky top-0 select-none z-30 font-sans transition-all duration-200 shrink-0`}>
+    <aside className={`${collapsed ? 'w-16' : 'w-60'} no-print bg-slate-900 border-r border-slate-800 flex flex-col h-screen sticky top-0 select-none z-30 font-sans transition-all duration-200 shrink-0`}>
       {/* Brand Header */}
       <div className={`border-b border-slate-800 ${collapsed ? 'p-3 flex flex-col items-center space-y-3' : 'p-4 space-y-2.5'}`}>
         {!collapsed ? (

@@ -14,6 +14,10 @@ MIN_COHORT_FOR_INTERVAL = 10
 MIN_MODEL_SAMPLE = 25
 MODEL_RESIDUAL_Z_THRESHOLD = 2.5
 
+# Phase 3 workload engine: Dynamic_Threshold = 1.5 + (0.15 * active_prs_in_queue)
+BASE_ANOMALY_RATIO = 1.5
+QUEUE_PRESSURE_INCREMENT = 0.15
+
 
 def is_bot(username: str) -> bool:
     value = (username or "").lower()
@@ -198,6 +202,134 @@ def reviewer_activity(pull_requests: Sequence[Dict[str, Any]]) -> None:
         )
 
 
+def _is_open_at(pr: Dict[str, Any], moment: datetime) -> bool:
+    created = parse_timestamp(pr.get("created_at"))
+    closed = parse_timestamp(pr.get("closed_at") or pr.get("merged_at"))
+    return bool(created and created <= moment and (closed is None or closed >= moment))
+
+
+def annotate_workload_thresholds(
+    pull_requests: Sequence[Dict[str, Any]],
+    baselines: Dict[str, Dict[str, Any]],
+) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Apply the Phase 3 workload-adjusted anomaly threshold.
+
+    Dynamic_Threshold = 1.5 + (0.15 * active_prs_in_queue)
+
+    The active queue is reconstructed from explicit ``review_requested``
+    timeline events in the sampled window: at the PR's ready-for-review time it
+    counts other sampled PRs that were still open and already waiting on the
+    eventual first reviewer. The rule is additive to the robust residual model,
+    not a replacement, so both signals remain auditable.
+    """
+    pr_by_number = {int(pr["pr_number"]): pr for pr in pull_requests}
+    requests_by_reviewer: Dict[str, List[tuple[int, datetime]]] = {}
+    for pr in pull_requests:
+        for request in pr.get("review_requests") or []:
+            reviewer = (request.get("reviewer") or "").lower()
+            requested_at = parse_timestamp(request.get("requested_at"))
+            if reviewer and requested_at:
+                requests_by_reviewer.setdefault(reviewer, []).append(
+                    (int(pr["pr_number"]), requested_at)
+                )
+    reviewers_with_requests = set(requests_by_reviewer)
+
+    flagged: List[Dict[str, Any]] = []
+    queue_values: List[int] = []
+    evaluated = 0
+    covered = 0
+
+    for pr in pull_requests:
+        first = pr.get("first_review") or {}
+        reviewer = (first.get("reviewer") or "").lower()
+        moment = parse_timestamp(pr.get("ready_for_review_at") or pr.get("created_at"))
+        baseline = baselines.get(pr.get("size_category")) or {}
+        median = baseline.get("median_hours")
+        latency = pr.get("first_review_latency_hours")
+
+        queue = 0
+        has_coverage = bool(reviewer and moment)
+        has_request_coverage = False
+        if has_coverage:
+            has_request_coverage = reviewer in reviewers_with_requests
+            if has_request_coverage:
+                covered += 1
+            active = set()
+            for other_number, requested_at in requests_by_reviewer.get(reviewer, []):
+                if other_number == pr["pr_number"] or requested_at > moment:
+                    continue
+                other = pr_by_number.get(other_number)
+                if other is not None and _is_open_at(other, moment):
+                    active.add(other_number)
+            queue = len(active)
+            if has_request_coverage:
+                queue_values.append(queue)
+
+        ratio = round(
+            BASE_ANOMALY_RATIO + QUEUE_PRESSURE_INCREMENT * queue, 3
+        )
+        threshold = round(float(median) * ratio, 2) if median is not None else None
+        workload_ratio = (
+            round(float(latency) / float(median), 2)
+            if latency is not None and median not in (None, 0)
+            else None
+        )
+        is_flagged = bool(
+            threshold is not None and latency is not None and float(latency) > threshold
+        )
+
+        pr["reviewer_queue_at_creation"] = queue if has_request_coverage else None
+        pr["dynamic_threshold_ratio"] = ratio
+        pr["dynamic_threshold_hours"] = threshold
+        pr["is_workload_anomaly"] = is_flagged
+        pr["workload_ratio_to_median"] = workload_ratio
+
+        if has_coverage:
+            evaluated += 1
+        if is_flagged:
+            flagged.append(
+                {
+                    "pr_number": pr["pr_number"],
+                    "title": pr["title"],
+                    "author": pr["author"],
+                    "size_category": pr["size_category"],
+                    "first_reviewer": first.get("reviewer"),
+                    "reviewer_queue_at_creation": queue if has_request_coverage else None,
+                    "dynamic_threshold_ratio": ratio,
+                    "dynamic_threshold_hours": threshold,
+                    "cohort_median_hours": median,
+                    "first_review_latency_hours": latency,
+                    "workload_ratio_to_median": workload_ratio,
+                    "html_url": pr.get("html_url"),
+                }
+            )
+
+    flagged.sort(
+        key=lambda row: (row.get("workload_ratio_to_median") or 0), reverse=True
+    )
+    summary = {
+        "method": "Dynamic_Threshold = 1.5 + (0.15 * active_prs_in_queue)",
+        "base_ratio": BASE_ANOMALY_RATIO,
+        "queue_pressure_increment": QUEUE_PRESSURE_INCREMENT,
+        "evaluated_prs": evaluated,
+        "request_coverage_pct": round(100 * covered / evaluated, 1) if evaluated else 0.0,
+        "average_queue_at_creation": (
+            round(float(np.mean(queue_values)), 2) if queue_values else None
+        ),
+        "max_queue_at_creation": int(max(queue_values)) if queue_values else None,
+        "flagged_count": len(flagged),
+        "definition": (
+            "Other sampled PRs still open at this PR's ready-for-review time that "
+            "already had an explicit review request for the eventual first reviewer."
+        ),
+        "limitation": (
+            "Only sampled PRs and explicit review_requested timeline events are "
+            "visible; assignments outside the sample are not counted."
+        ),
+    }
+    return flagged, summary
+
+
 def build_pull_request_record(raw: Dict[str, Any], detail: Optional[Dict[str, Any]],
                               timeline: Optional[List[Dict[str, Any]]],
                               observed_at: datetime) -> Dict[str, Any]:
@@ -205,7 +337,7 @@ def build_pull_request_record(raw: Dict[str, Any], detail: Optional[Dict[str, An
     author = (raw.get("user") or {}).get("login", "unknown")
     created, merged, closed = (parse_timestamp(raw.get(key)) for key in ("created_at", "merged_at", "closed_at"))
     events = timeline or []
-    reviews, author_comments, requested_times = [], [], []
+    reviews, author_comments, requested_times, review_requests = [], [], [], []
     for event in events:
         event_type = event.get("event")
         if event_type == "reviewed":
@@ -224,6 +356,14 @@ def build_pull_request_record(raw: Dict[str, Any], detail: Optional[Dict[str, An
             requested = parse_timestamp(event.get("created_at"))
             if requested:
                 requested_times.append(requested)
+                requested_reviewer = (event.get("requested_reviewer") or {}).get("login")
+                if requested_reviewer and not is_bot(requested_reviewer):
+                    review_requests.append(
+                        {
+                            "reviewer": requested_reviewer,
+                            "requested_at": event.get("created_at"),
+                        }
+                    )
 
     reviews.sort(key=lambda item: item["submitted_at"])
     author_comments.sort()
@@ -294,7 +434,13 @@ def build_pull_request_record(raw: Dict[str, Any], detail: Optional[Dict[str, An
         "created_to_merge_hours": hours_between(created, merged),
         "review_rounds": len(reviews),
         "human_reviews": reviews,
+        "review_requests": review_requests,
         "reviewer_activity_7d": None,
+        "reviewer_queue_at_creation": None,
+        "dynamic_threshold_ratio": None,
+        "dynamic_threshold_hours": None,
+        "is_workload_anomaly": False,
+        "workload_ratio_to_median": None,
         "duration_hours": duration,
     }
 
@@ -304,6 +450,7 @@ def finalize_analysis(pull_requests: List[Dict[str, Any]], owner: str, repo: str
     reviewer_activity(pull_requests)
     analysis_records = [pr for pr in pull_requests if not pr.get("is_bot_author")]
     baselines = cohort_baselines(analysis_records)
+    workload_anomalies, workload_engine = annotate_workload_thresholds(analysis_records, baselines)
     model = fit_robust_latency_model(analysis_records)
     predictions = model.pop("predictions", {})
     anomalies: List[Dict[str, Any]] = []
@@ -392,6 +539,12 @@ def finalize_analysis(pull_requests: List[Dict[str, Any]], owner: str, repo: str
         warnings.append(f"Adjusted anomaly scoring is unavailable: {model.get('status')} (requires at least {MIN_MODEL_SAMPLE} observed first reviews with complete model inputs).")
     if ci_cohorts < sum(bool(group["sample_size"]) for group in baselines.values()):
         warnings.append("Some cohort confidence intervals are unavailable because the event count, sample size, or censoring was insufficient.")
+    if workload_engine["evaluated_prs"] and workload_engine["request_coverage_pct"] < 50:
+        warnings.append(
+            "Workload-adjusted thresholds have limited review-request coverage: "
+            f"{workload_engine['request_coverage_pct']}% of evaluated PRs had an explicit "
+            "review_requested timeline event for their eventual first reviewer."
+        )
     return {
         "owner": owner, "repo": repo,
         "total_prs_in_sample": len(pull_requests),
@@ -407,6 +560,8 @@ def finalize_analysis(pull_requests: List[Dict[str, Any]], owner: str, repo: str
         "baseline_medians": baselines,
         "anomalies_count": len(anomalies), "anomalies": anomalies,
         "workload_summary": workload_summary,
+        "workload_engine": workload_engine,
+        "workload_anomalies": workload_anomalies,
         "pull_requests": pull_requests, "model": model, "metadata": metadata,
         "data_quality": {
             "timeline_records_complete": timeline_complete,
@@ -415,6 +570,7 @@ def finalize_analysis(pull_requests: List[Dict[str, Any]], owner: str, repo: str
             "anomaly_interpretation": "Triage signals for process investigation; shorter turnaround does not establish review quality.",
             "primary_outcome": "time to first human review (queue latency); open PRs without a review are right-censored at audit time",
             "reviewer_workload_proxy": "count of sampled human review events by the eventual first reviewer in the prior seven days; not a complete concurrent assignment count",
+            "workload_threshold_rule": "Dynamic_Threshold = 1.5 + (0.15 * active_prs_in_queue); reported alongside, not instead of, the robust residual model",
             "author_response_proxy": "first author issue-comment event after the first human review; does not measure all code-response activity",
             "stage_metrics_note": "request-to-first-review and approval-to-merge are conditional on those events being available; response time is a comment proxy",
             "complexity_definition": {"small": "<=100 changed lines and <=5 files", "medium": "<=1000 changed lines and <=20 files", "large": "above either medium threshold", "missing": "Unknown"},

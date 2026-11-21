@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import TopHeader from './components/TopHeader';
 import PageHeader from './components/PageHeader';
@@ -13,6 +14,10 @@ import ReviewAnalysisView from './components/ReviewAnalysisView';
 import DetectedPatternsView from './components/DetectedPatternsView';
 import LandingPage from './components/LandingPage';
 import ContributorDashboard from './components/ContributorDashboard';
+import ReviewerDashboard from './components/ReviewerDashboard';
+import ManagerDashboard from './components/ManagerDashboard';
+import RequireAuth from './components/RequireAuth';
+import { ColdStartToast } from './components/SkeletonLoader';
 import { ErrorState } from './components/States';
 import { FALLBACK_AUDIT_DATA } from './data/sampleAudits';
 import { apiUrl, getAuthHeaders } from './lib/api';
@@ -33,26 +38,39 @@ import {
   ExternalLink
 } from 'lucide-react';
 
-export default function App() {
-  // Sync tab state with URL hash
-  const getInitialTab = () => {
-    if (typeof window !== 'undefined') {
-      const rawHash = window.location.hash.replace(/^#\/?/, '');
-      if (rawHash.includes('access_token=') || rawHash.includes('provider_token=')) {
-        return 'overview';
-      }
-      const hash = rawHash.toLowerCase();
-      if (['overview', 'contributor', 'analysis', 'patterns', 'methodology', 'presentation', 'ethics'].includes(hash)) {
-        return hash;
-      }
-      if (hash === 'audit' || hash === 'app' || hash === 'dashboard') return 'overview';
-      if (hash === 'deck' || hash === 'slides') return 'presentation';
-      if (hash === 'home' || hash === 'landing') return 'home';
-    }
-    return 'home';
-  };
+const TAB_ROUTES = {
+  home: '/',
+  overview: '/overview',
+  reviewer: '/reviewer',
+  contributor: '/contributor',
+  manager: '/manager',
+  analysis: '/analysis',
+  patterns: '/patterns',
+  methodology: '/methodology',
+  presentation: '/presentation',
+  ethics: '/ethics',
+};
 
-  const [activeTab, setActiveTab] = useState(getInitialTab);
+const PATH_TABS = Object.fromEntries(
+  Object.entries(TAB_ROUTES).map(([tab, path]) => [path, tab]),
+);
+
+function tabForPath(pathname) {
+  const normalized = (pathname || '/').replace(/\/+$/, '') || '/';
+  if (PATH_TABS[normalized]) return PATH_TABS[normalized];
+  const bare = normalized.replace(/^\//, '').toLowerCase();
+  if (TAB_ROUTES[bare]) return bare;
+  if (['audit', 'app', 'dashboard'].includes(bare)) return 'overview';
+  if (['deck', 'slides'].includes(bare)) return 'presentation';
+  if (['home', 'landing'].includes(bare)) return 'home';
+  return 'home';
+}
+
+export default function App() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const activeTab = tabForPath(location.pathname);
+
   const [repoInput, setRepoInput] = useState('fastapi/fastapi');
   const [currentRepo, setCurrentRepo] = useState('fastapi/fastapi');
   const [loading, setLoading] = useState(false);
@@ -60,44 +78,37 @@ export default function App() {
   const [auditData, setAuditData] = useState(FALLBACK_AUDIT_DATA['fastapi/fastapi']);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [authUser, setAuthUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [slowLoading, setSlowLoading] = useState(false);
 
-  // Tab navigation handler
+  // Route navigation handler
   const handleNavigate = (tab) => {
-    setActiveTab(tab);
+    navigate(TAB_ROUTES[tab] || '/');
     setMobileOpen(false);
     if (typeof window !== 'undefined') {
-      if (tab === 'home') {
-        window.location.hash = '';
-      } else {
-        window.location.hash = tab;
-      }
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
-  // Browser back/forward navigation sync
+  // Surface a cold-start toast when a Render free-tier instance is waking up.
   useEffect(() => {
-    const handleHashChange = () => {
-      const rawHash = window.location.hash.replace(/^#\/?/, '');
-      if (rawHash.includes('access_token=') || rawHash.includes('provider_token=')) {
-        setActiveTab('overview');
-        return;
-      }
-      const hash = rawHash.toLowerCase();
-      if (['overview', 'contributor', 'analysis', 'patterns', 'methodology', 'presentation', 'ethics'].includes(hash)) {
-        setActiveTab(hash);
-      } else if (hash === 'presentation' || hash === 'deck' || hash === 'slides') {
-        setActiveTab('presentation');
-      } else if (hash === 'audit' || hash === 'dashboard') {
-        setActiveTab('overview');
-      } else {
-        setActiveTab('home');
-      }
+    if (!loading) return undefined;
+    const timer = window.setTimeout(() => setSlowLoading(true), 4000);
+    return () => {
+      window.clearTimeout(timer);
+      setSlowLoading(false);
     };
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
+  }, [loading]);
+
+  // Supabase's implicit OAuth flow returns an access token in the URL hash.
+  // Capture it before the hash router shows a 404-style route.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.location.hash.includes('access_token=') || window.location.hash.includes('provider_token=')) {
+      navigate('/overview', { replace: true });
+    }
+  }, [navigate]);
 
   // Parse repo from string or URL
   const parseRepo = (input) => {
@@ -221,9 +232,8 @@ export default function App() {
             avatar_url: meta.avatar_url,
             github_id: meta.provider_id,
           });
-          if (window.location.hash.includes('access_token=')) {
-            window.history.replaceState(null, '', window.location.pathname + '#overview');
-            setActiveTab('overview');
+          if (window.location.hash.includes('access_token=') || window.location.hash.includes('provider_token=')) {
+            navigate('/overview', { replace: true });
           }
         }
       }).catch(() => null);
@@ -241,10 +251,7 @@ export default function App() {
             github_id: meta.provider_id,
           });
           if (event === 'SIGNED_IN') {
-            if (window.location.hash.includes('access_token=')) {
-              window.history.replaceState(null, '', window.location.pathname + '#overview');
-            }
-            setActiveTab('overview');
+            navigate('/overview', { replace: true });
           }
         } else if (event === 'SIGNED_OUT') {
           setAuthUser(null);
@@ -256,7 +263,8 @@ export default function App() {
         subscription?.unsubscribe();
       };
     }
-  }, []);
+    return undefined;
+  }, [navigate]);
 
   // Sync with backend /api/auth/me forwarding the provider token
   useEffect(() => {
@@ -270,7 +278,8 @@ export default function App() {
           setAuthUser((prev) => ({ ...prev, ...payload.user }));
         }
       })
-      .catch(() => null);
+      .catch(() => null)
+      .finally(() => setAuthChecked(true));
   }, []);
 
   // Initial load
@@ -320,10 +329,10 @@ export default function App() {
   // 2. ANALYTICAL APPLICATION WORKSPACE (WITH SIDEBAR & TOPHEADER)
   // =========================================================================
   return (
-    <div className="min-h-screen bg-[#07090e] text-slate-100 flex flex-col md:flex-row font-sans selection:bg-orange-500/30 selection:text-orange-200">
+    <div className="app-shell min-h-screen bg-[#07090e] text-slate-100 flex flex-col md:flex-row font-sans selection:bg-orange-500/30 selection:text-orange-200">
       
       {/* Desktop Left Navigation Sidebar */}
-      <div className="hidden md:block">
+      <div className="no-print hidden md:block">
         <Sidebar
           activeTab={activeTab}
           onNavigate={handleNavigate}
@@ -334,7 +343,7 @@ export default function App() {
 
       {/* Mobile Drawer Overlay */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 md:hidden bg-slate-950/80 backdrop-blur-sm animate-fade-in flex">
+        <div className="no-print fixed inset-0 z-50 md:hidden bg-slate-950/80 backdrop-blur-sm animate-fade-in flex">
           <div className="w-64 h-full">
             <Sidebar
               activeTab={activeTab}
@@ -367,7 +376,7 @@ export default function App() {
         />
 
         {/* Dynamic Main Content Area */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
+        <main className="app-main flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
           
           {/* ========================================================================= */}
           {/* OVERVIEW & LIVE AUDIT DASHBOARD                                           */}
@@ -377,7 +386,7 @@ export default function App() {
               
               {/* Page Title & Repo Metadata */}
               <PageHeader
-                title={`Reviewer Dashboard: ${currentRepo}`}
+                title={`Repository Overview: ${currentRepo}`}
                 subtitle="Repository review queue latency, censored open work, and adjusted process triage signals."
                 badges={[
                   { label: 'GitHub REST API v3', color: 'bg-slate-800 text-slate-300 border-slate-700' },
@@ -531,15 +540,61 @@ export default function App() {
             </div>
           )}
 
+          {activeTab === 'reviewer' && (
+            <div className="animate-fade-in">
+              <RequireAuth
+                authUser={authUser}
+                checking={!authChecked}
+                onLogin={handleLogin}
+                role="reviewer"
+              >
+                <ReviewerDashboard
+                  auditData={auditData}
+                  currentRepo={currentRepo}
+                  loading={loading}
+                  error={error}
+                  onRefresh={() => handleRunAudit(currentRepo)}
+                />
+              </RequireAuth>
+            </div>
+          )}
+
           {activeTab === 'contributor' && (
             <div className="animate-fade-in">
-              <ContributorDashboard
-                auditData={auditData}
-                currentRepo={currentRepo}
-                loading={loading}
-                error={error}
-                onRefresh={() => handleRunAudit(currentRepo)}
-              />
+              <RequireAuth
+                authUser={authUser}
+                checking={!authChecked}
+                onLogin={handleLogin}
+                role="contributor"
+              >
+                <ContributorDashboard
+                  auditData={auditData}
+                  currentRepo={currentRepo}
+                  loading={loading}
+                  error={error}
+                  onRefresh={() => handleRunAudit(currentRepo)}
+                  authUser={authUser}
+                />
+              </RequireAuth>
+            </div>
+          )}
+
+          {activeTab === 'manager' && (
+            <div className="animate-fade-in">
+              <RequireAuth
+                authUser={authUser}
+                checking={!authChecked}
+                onLogin={handleLogin}
+                role="manager"
+              >
+                <ManagerDashboard
+                  auditData={auditData}
+                  currentRepo={currentRepo}
+                  loading={loading}
+                  error={error}
+                  onRefresh={() => handleRunAudit(currentRepo)}
+                />
+              </RequireAuth>
             </div>
           )}
 
@@ -609,7 +664,7 @@ export default function App() {
         </main>
 
         {/* Global Engineered Footer */}
-        <footer className="border-t border-slate-900 bg-slate-950 px-4 sm:px-6 lg:px-8 py-4 text-[11px] font-mono text-slate-500 select-none">
+        <footer className="no-print border-t border-slate-900 bg-slate-950 px-4 sm:px-6 lg:px-8 py-4 text-[11px] font-mono text-slate-500 select-none">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2.5">
             <div className="flex items-center space-x-2">
               <span className="font-semibold text-slate-400">RevAudit</span>
@@ -634,6 +689,8 @@ export default function App() {
         </footer>
 
       </div>
+
+      <ColdStartToast show={slowLoading} />
     </div>
   );
 }

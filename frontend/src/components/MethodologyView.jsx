@@ -134,6 +134,19 @@ export default function MethodologyView() {
               $$\text&#123;Variance Ratio &#125; \mathcal&#123;R&#125;_i = \frac&#123;\Delta t_i&#125;&#123;\tilde&#123;x&#125;_C&#125;$$
             </div>
           </div>
+          <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 font-mono text-[11px] space-y-1.5">
+            <span className="text-amber-400 font-semibold block">Phase 3 workload-adjusted threshold</span>
+            <div className="text-slate-200">
+              Dynamic_Threshold = 1.5 + (0.15 × active_prs_in_queue)
+            </div>
+            <p className="text-slate-400 text-[10px] font-sans leading-relaxed">
+              The active queue counts other sampled PRs still open at this PR's
+              ready-for-review time that already had an explicit review request for
+              the eventual first reviewer. Empty queues enforce the strict 1.5×
+              baseline; busy queues widen the allowance. This rule is reported
+              alongside the robust residual model, not as a replacement.
+            </p>
+          </div>
         </div>
       )
     },

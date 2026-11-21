@@ -131,10 +131,17 @@
     </table>
   </div>
 
+  <div style="margin: 16px 0; padding: 12px 16px; border-left: 4px solid #d97706; background: #fffbeb; color: #78350f; font-size: 13px; border-radius: 6px;">
+    <strong>Implementation note:</strong> this static HTML preserves the original Phase 1 report.
+    The current Phase 2–4 implementation (censoring-aware Kaplan–Meier baselines, bootstrap
+    95% intervals, robust residual triage, the workload-adjusted threshold, persistence,
+    webhooks, and role dashboards) is documented in
+    <code>docs/PROJECT_REPORT.md</code> and <code>docs/IMPLEMENTATION_GUIDE.md</code>.
+  </div>
+
   <div class="abstract-box">
     <h3 style="margin-top: 0; color: #3730a3;">Abstract &amp; Executive Summary</h3>
-    <p style="margin-bottom: 0;">
-      Turnaround time is the predominant metric used to measure code review velocity. However, flat arithmetic metrics like "time-to-merge" fail because they do not control for pull request complexity or reviewer workload. This creates perverse incentives that encourage superficial "LGTM" approvals on trivial PRs while penalizing thorough reviews on large changes. <strong>RevAudit</strong> introduces size-controlled median baselines using live data from GitHub's REST API v3. By segmenting PRs into complexity cohorts, computing non-parametric medians with 90% confidence intervals, and flagging PRs exceeding 1.5× group medians, RevAudit delivers statistically rigorous code review audits without relying on external databases.
+    <p style="margin-bottom: 0;">      Turnaround time is the predominant metric used to measure code review velocity. However, flat arithmetic metrics like "time-to-merge" fail because they do not control for pull request complexity or reviewer workload. This creates perverse incentives that encourage superficial "LGTM" approvals on trivial PRs while penalizing thorough reviews on large changes. <strong>RevAudit</strong> introduces size-controlled median baselines using live data from GitHub's REST API v3. By segmenting PRs into complexity cohorts, computing non-parametric medians with 90% confidence intervals, and flagging PRs exceeding 1.5× group medians, RevAudit delivers statistically rigorous code review audits without relying on external databases.
     </p>
   </div>
 
