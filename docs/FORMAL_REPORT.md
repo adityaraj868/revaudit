@@ -46,19 +46,20 @@ and ReportLab, whose documentation and tooling supported this work.
 7. [Statistical Methodology](#7-statistical-methodology)
 8. [Backend Implementation](#8-backend-implementation)
 9. [Frontend Implementation](#9-frontend-implementation)
-10. [Deployment and Operations](#10-deployment-and-operations)
-11. [Testing and Verification](#11-testing-and-verification)
-12. [Results and Discussion](#12-results-and-discussion)
-13. [Ethics, Privacy, and Governance](#13-ethics-privacy-and-governance)
-14. [Limitations and Future Work](#14-limitations-and-future-work)
-15. [Conclusion](#15-conclusion)
-16. [References](#16-references)
-17. [Appendix A — API Reference](#appendix-a--api-reference)
-18. [Appendix B — Database Schema](#appendix-b--database-schema)
-19. [Appendix C — Environment Variables](#appendix-c--environment-variables)
-20. [Appendix D — Test Inventory](#appendix-d--test-inventory)
-21. [Appendix E — Reproduction Guide](#appendix-e--reproduction-guide)
-22. [Appendix F — Glossary](#appendix-f--glossary)
+10. [Browser Extension](#10-browser-extension)
+11. [Deployment and Operations](#11-deployment-and-operations)
+12. [Testing and Verification](#12-testing-and-verification)
+13. [Results and Discussion](#13-results-and-discussion)
+14. [Ethics, Privacy, and Governance](#14-ethics-privacy-and-governance)
+15. [Limitations and Future Work](#15-limitations-and-future-work)
+16. [Conclusion](#16-conclusion)
+17. [References](#17-references)
+18. [Appendix A — API Reference](#appendix-a--api-reference)
+19. [Appendix B — Database Schema](#appendix-b--database-schema)
+20. [Appendix C — Environment Variables](#appendix-c--environment-variables)
+21. [Appendix D — Test Inventory](#appendix-d--test-inventory)
+22. [Appendix E — Reproduction Guide](#appendix-e--reproduction-guide)
+23. [Appendix F — Glossary](#appendix-f--glossary)
 
 ---
 
@@ -85,11 +86,14 @@ Dynamic_Threshold = 1.5 + (0.15 × active_prs_in_queue)
 The implementation consists of a FastAPI backend with GitHub OAuth, Supabase/Postgres
 persistence, signed webhook ingestion, and PDF export; and a React single-page
 application with protected reviewer, contributor, and manager dashboards, a smart
-triage queue, a complexity coach, and a print-ready manager report. The system is
-deployed with the frontend on GitHub Pages, the API on Render, authentication and
-PostgreSQL on Supabase, and GitHub webhooks for closed-PR ingestion.
+triage queue, a complexity coach, and a print-ready manager report. A Manifest V3
+browser extension extends the same analysis to a toolbar popup with public and
+signed-in modes, GitHub OAuth, background audit state, and a one-field repository
+link workflow. The system is deployed with the frontend on GitHub Pages, the API
+on Render, authentication and PostgreSQL on Supabase, and GitHub webhooks for
+closed-PR ingestion.
 
-Verification includes 22 backend tests, browser-level end-to-end checks of routing,
+Verification includes 25 backend tests, browser-level end-to-end checks of routing,
 role gates, queue ordering, complexity warnings, and print behaviour, plus live
 audits against public repositories and persistence/history checks against PostgreSQL.
 The report also documents the statistical assumptions, deployment configuration,
@@ -98,7 +102,7 @@ route-based role views and true role-based access control.
 
 **Keywords:** code review, review latency, survival analysis, Kaplan–Meier,
 right-censoring, robust regression, reviewer workload, GitHub API, FastAPI, React,
-Supabase, deployment.
+Supabase, browser extension, OAuth, deployment.
 
 ---
 
@@ -168,8 +172,10 @@ productivity.
   a historical audit system.
 - A role-oriented frontend with distinct workflows for contributors, reviewers,
   and managers.
-- A deployment blueprint spanning Supabase Auth/PostgreSQL, Render, and GitHub
-  Pages.
+- A Manifest V3 browser extension with public and signed-in modes, OAuth token
+  exchange, background audits, and persisted popup state.
+- A deployment blueprint spanning Supabase Auth/PostgreSQL, Render, GitHub Pages,
+  and the extension OAuth redirect.
 - A reproducible verification suite covering statistics, persistence, webhook
   signatures, PDF generation, and browser-level UI behaviour.
 
@@ -264,6 +270,11 @@ workflows by route while keeping a shared data payload.
 | FR-11 | Protect role views | `RequireAuth` |
 | FR-12 | Show loading and cold-start feedback | Skeletons + toast |
 | FR-13 | Coach contributors on large drafts | Complexity Coach |
+| FR-14 | Audit public repositories without login | Extension public mode |
+| FR-15 | Sign in for private repositories | GitHub OAuth or PAT |
+| FR-16 | Run audits without blocking the popup | Background service worker |
+| FR-17 | Restore audit state after popup closure | `chrome.storage.local` |
+| FR-18 | Accept a repository link with inline validation | Extension repo-link field |
 
 ### 4.3 Non-Functional Requirements
 
@@ -276,6 +287,7 @@ workflows by route while keeping a shared data payload.
 | Usability | Responsive dark UI; role-specific navigation; print-ready manager report |
 | Deployability | Managed Postgres/Auth; Render API; GitHub Pages frontend |
 | Maintainability | Modular backend files; typed-ish schemas; documented environment |
+| Extension | MV3 security model; no client secret in the package; inline validation |
 
 ### 4.4 Assumptions and Constraints
 
@@ -315,6 +327,10 @@ workflows by route while keeping a shared data payload.
 
 GitHub webhook ──► POST /api/webhook/github ──► BackgroundTasks ──► DB
 ```
+
+The browser extension is an additional client of the same API. Its popup calls the
+audit endpoint, and its background worker exchanges OAuth codes through the
+backend; the statistical and persistence paths are unchanged.
 
 ### 5.2 Request Flows
 
@@ -369,6 +385,7 @@ GitHub webhook ──► POST /api/webhook/github ──► BackgroundTasks ─�
 | Auth + DB | Supabase | managed | OAuth provider + Postgres |
 | API host | Render | free web service | Simple Python deployment |
 | Frontend host | GitHub Pages | static | Zero-cost static hosting |
+| Extension | Chrome MV3 (plain JS) | — | Toolbar audits with OAuth and background state |
 
 ### 5.4 Repository Structure
 
@@ -385,6 +402,10 @@ GitHub webhook ──► POST /api/webhook/github ──► BackgroundTasks ─�
 | `frontend/src/App.jsx` | Route shell, audit state, auth wiring |
 | `frontend/src/components/` | Dashboards and visual components |
 | `frontend/src/lib/` | API and Supabase clients |
+| `extension/manifest.json` | Manifest V3, permissions, fixed public key |
+| `extension/popup.*` | Toolbar UI, repo link, results |
+| `extension/background.js` | OAuth, audit execution, state persistence |
+| `extension/config.js` | Public client ID and API base |
 | `docs/` | Reports, implementation guide, PlantUML diagrams |
 | `render.yaml` | Render service definition |
 | `.github/workflows/deploy-frontend.yml` | GitHub Pages build/deploy |
@@ -395,6 +416,8 @@ GitHub webhook ──► POST /api/webhook/github ──► BackgroundTasks ─�
 - **Render** hosts the FastAPI service (`revaudit-backend`).
 - **GitHub Pages** hosts the built SPA at `/revaudit/`.
 - **GitHub webhooks** deliver closed-PR events to Render.
+- **Chrome/Edge extension** runs the audit popup against the API and exchanges
+  OAuth codes through Render.
 
 Cross-site cookies use `SameSite=None` when `COOKIE_SECURE=true`; the GitHub Pages
 origin is allowed through `FRONTEND_URL`, while OAuth redirects preserve the
@@ -628,6 +651,7 @@ lines of code. Key modules:
 | GET | `/api/audit` | Paginated audit and statistics |
 | GET | `/api/history` | Persisted PR/review mirror |
 | POST | `/api/webhook/github` | Signed webhook ingestion |
+| POST | `/api/github/oauth/exchange` | Exchange an extension OAuth code for a token |
 | POST | `/api/reports/pdf` | PDF export |
 
 Full request/response details appear in Appendix A.
@@ -674,7 +698,9 @@ manager dashboard additionally supports native browser printing with a dedicated
 Environment variables are documented in Appendix C. Production requires
 `DATABASE_URL`, `GITHUB_TOKEN`, `FRONTEND_URL`, `SESSION_SECRET`,
 `COOKIE_SECURE=true`, `GITHUB_WEBHOOK_SECRET`, and `PERSIST_AUDITS=true`.
-OAuth fallback credentials are optional when Supabase Auth is used.
+`GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` also power the extension token
+exchange; the extension redirect URI must be registered on the OAuth App. OAuth
+fallback credentials are optional when Supabase Auth is used.
 
 ---
 
@@ -709,7 +735,7 @@ then:
 
 Important: this is authentication-aware routing, not role-based access control.
 Any authenticated user can open any role route. This gap is discussed in Section
-14.
+15.
 
 ### 9.3 Repository Overview
 
@@ -792,9 +818,175 @@ frontend contains approximately 6,867 lines of JSX/JS/CSS across 33 files.
 
 ---
 
-## 10. Deployment and Operations
+## 10. Browser Extension
 
-### 10.1 Supabase
+### 10.1 Purpose and Access Modes
+
+RevAudit also ships as a Manifest V3 browser extension so a reviewer can audit a
+repository without leaving GitHub. It has two access modes:
+
+| Mode | Login required | Repository access | GitHub API budget |
+|---|---|---|---|
+| **Public mode** | No | Public repositories | Server `public_repo` token |
+| **Signed-in mode** | Yes | Public and private repositories | User token, 5,000 req/hr |
+
+Signed-in mode offers GitHub OAuth as the primary path and a personal access token
+as an advanced fallback. The extension is a thin client: the FastAPI backend
+performs the censoring-aware analysis and PostgreSQL persistence.
+
+### 10.2 Extension Architecture
+
+The extension uses plain JavaScript with no build step:
+
+- `extension/manifest.json` — Manifest V3 manifest, permissions, fixed public key.
+- `extension/popup.html` / `popup.css` / `popup.js` — toolbar interface.
+- `extension/background.js` — OAuth, audit execution, state and badge management.
+- `extension/config.js` — public API base and OAuth client ID.
+- `extension/logo.png` and `icons/` — brand assets extracted from the product
+  poster.
+
+```text
+Popup
+  │  chrome.runtime.sendMessage
+  ▼
+Background service worker
+  │  chrome.identity.launchWebAuthFlow → GitHub authorize
+  │  POST /api/github/oauth/exchange    → access token
+  │  GET  /api/audit                    → v2 analysis
+  ▼
+chrome.storage.local  →  session and last audit state
+```
+
+Because the audit runs in the service worker, closing the popup does not cancel
+an in-flight audit. The popup reads the saved state when it reopens.
+
+### 10.3 Authentication and Token Handling
+
+The extension uses GitHub's OAuth web flow:
+
+1. The popup sends `START_OAUTH` to the background worker.
+2. The worker calls `chrome.identity.launchWebAuthFlow` with the public client ID
+   and a random `state`, using `chrome.identity.getRedirectURL()` as the redirect.
+3. GitHub returns an authorization code to the extension.
+4. The worker validates `state` and posts the code and redirect URI to
+   `POST /api/github/oauth/exchange`.
+5. The backend exchanges the code using the client secret, which never enters the
+   extension, and returns only the access token.
+6. The worker fetches the GitHub profile and rate limit, then stores
+   `gh_auth` in `chrome.storage.local`.
+
+The extension sends the token as `Authorization: Bearer` on audit requests. The
+backend uses that token for GitHub calls and does not persist it. A personal
+access token can be pasted instead; it goes through the same bearer path.
+
+If GitHub authorization is cancelled, the popup has already closed. The worker
+stores the error and sets a red `!` badge; reopening the popup shows the
+cancellation message in the auth drawer.
+
+### 10.4 Audit Execution and State Persistence
+
+The popup sends `RUN_AUDIT` with a repository and a 25-PR sample limit. The worker
+immediately stores:
+
+```text
+{ id, status: "loading", owner, repo, slug, limit, startedAt, data, error }
+```
+
+under `revaudit_audit` in `chrome.storage.local`, then performs:
+
+```text
+GET /api/audit?owner=<owner>&repo=<repo>&limit=25
+Authorization: Bearer <user token>   (signed-in mode only)
+```
+
+On completion it stores `status: "done"` with the full v2 payload. On failure it
+stores `status: "error"` with a user-readable message. The popup polls
+`GET_AUDIT` every 1.5 seconds while open and restores the matching result on
+reopen. A loading state older than 180 seconds is treated as a timeout.
+
+This design fixes the original popup-lifecycle problem: clicking elsewhere in
+Chrome closes the extension popup, but the audit continues in the service worker
+and its result is available when the popup is opened again. The same mechanism
+restores the last audit after a browser restart.
+
+### 10.5 Popup Interface
+
+- One **Repository link** field accepts `owner/repo`, a GitHub URL, or a
+  `git@github.com:` remote.
+- **Current Tab** detects the repository from the active GitHub tab.
+- Inline validation replaces native `alert()` dialogs.
+- Metric cards show sampled PRs, merged PRs, median first review, and robust
+  triage signals.
+- Cohort rows show the Kaplan–Meier median, observed/censored counts, and 95%
+  interval for Small/Medium/Large/Unknown.
+- Reviewer workload is a two-column card grid with queue, correlation, workload
+  flags, coverage, and review-event counts.
+- Data-quality warnings are collapsed into an expandable row.
+- Results scroll to the top when a completed audit is rendered.
+
+### 10.6 Permissions and Security
+
+| Permission | Purpose |
+|---|---|
+| `activeTab`, `tabs` | Detect the active GitHub repository |
+| `storage` | Persist auth and audit state |
+| `clipboardWrite` | Copy device/authorization text |
+| `identity` | Launch the GitHub OAuth window |
+| Host permissions | `github.com`, `api.github.com`, Render, localhost |
+
+The extension does not inject content scripts or modify GitHub pages. Tokens are
+stored in extension storage, not in the database; a compromised browser profile
+could read them. Public mode sends no credentials to the backend. The backend
+accepts extension origins through `allow_origin_regex="chrome-extension://.*"`.
+
+### 10.7 Configuration and Deployment
+
+The manifest contains a fixed public key, giving the stable extension ID:
+
+```text
+iomendeapkpepmlapflpdjnogjapccff
+```
+
+One-time operator setup:
+
+1. Add the extension redirect URI to the GitHub OAuth App:
+   `https://iomendeapkpepmlapflpdjnogjapccff.chromiumapp.org/`
+2. Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` on Render.
+3. Redeploy the backend containing `/api/github/oauth/exchange`.
+4. Load `extension/` as an unpacked extension, or publish it to a store.
+
+The Analysis API defaults to the Render origin and can be changed in the popup's
+advanced settings, e.g. `http://localhost:8000` for local development.
+
+### 10.8 Verification
+
+- Backend OAuth exchange tests cover missing configuration, invalid redirect URIs,
+  and missing codes; the full suite has 25 tests.
+- Popup-level tests cover public mode (no `Authorization` header), signed-in mode
+  (`Bearer` token), inline validation, OAuth cancellation feedback, and restoring a
+  completed audit after reopening.
+- A service-worker harness verifies `RUN_AUDIT` stores loading state, sends the
+  user token, and transitions to `done`.
+- Live backend checks confirm public audits, persistence/history, and token
+  precedence: no bearer uses the server token, while an invalid bearer is rejected.
+- Measured live audit times were approximately 22 seconds for 25 PRs and 39
+  seconds for 50 PRs, excluding initial cold start.
+
+### 10.9 Limitations
+
+- The extension requires the RevAudit backend; it cannot analyze offline.
+- OAuth requires an operator-configured client secret and redirect URI.
+- Service-worker lifetimes are browser-managed; a very long request may still be
+  interrupted, in which case the stored loading state becomes a timeout.
+- The token is stored in extension storage rather than an OS keychain.
+- The extension is not published to the Chrome Web Store in this version.
+- Private repository webhooks are not supported by a public-only server token;
+  private access is user-token-only.
+- Role-based authorization is not enforced by the extension.
+
+## 11. Deployment and Operations
+
+### 11.1 Supabase
 
 - GitHub OAuth provider enabled with a dedicated GitHub OAuth App.
 - Callback URL: `https://<project-ref>.supabase.co/auth/v1/callback`.
@@ -804,7 +996,7 @@ frontend contains approximately 6,867 lines of JSX/JS/CSS across 33 files.
 - The anon/publishable key is used only in the browser; the service role key is not
   required by this application.
 
-### 10.2 Render
+### 11.2 Render
 
 `render.yaml` defines a Python web service:
 
@@ -818,7 +1010,7 @@ plan: free
 Production environment variables are listed in Appendix C. The free tier
 cold-starts; the frontend masks this with the skeleton/toast.
 
-### 10.3 GitHub Pages
+### 11.3 GitHub Pages
 
 `.github/workflows/deploy-frontend.yml` builds `frontend/` with Vite and publishes
 `frontend/dist` through `actions/deploy-pages`. Build-time variables:
@@ -833,7 +1025,7 @@ The workflow triggers on the `deploy` branch. Pages source must be **GitHub
 Actions**, not “Deploy from a branch”; the latter publishes the repository root and
 renders `README.md` with Jekyll instead of the React app.
 
-### 10.4 Webhooks
+### 11.4 Webhooks
 
 GitHub repository webhook:
 
@@ -847,7 +1039,7 @@ Events: Pull requests
 Only `pull_request.closed` is processed. The handler verifies the HMAC, returns
 immediately, and ingests in the background.
 
-### 10.5 Local Development
+### 11.5 Local Development
 
 ```bash
 # Backend
@@ -866,7 +1058,7 @@ npm run dev
 
 The UI is served at `http://localhost:5173/revaudit/`.
 
-### 10.6 Operational Checks
+### 11.6 Operational Checks
 
 - `GET /` returns service status and feature flags.
 - `/docs` exposes OpenAPI.
@@ -876,23 +1068,41 @@ The UI is served at `http://localhost:5173/revaudit/`.
 
 ---
 
-## 11. Testing and Verification
+### 11.7 Browser Extension Deployment
 
-### 11.1 Strategy
+The extension is distributed as an unpacked Manifest V3 folder or packaged for a
+browser store:
+
+1. Load `extension/` from `chrome://extensions` (Developer mode).
+2. The fixed manifest key gives the stable ID
+   `iomendeapkpepmlapflpdjnogjapccff`.
+3. Register `https://iomendeapkpepmlapflpdjnogjapccff.chromiumapp.org/` as a
+   redirect URI on the GitHub OAuth App.
+4. Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` on Render and redeploy the
+   backend with `/api/github/oauth/exchange`.
+5. Set the extension's Analysis API to Render (default) or
+   `http://localhost:8000` for local use.
+
+The extension has no build step. `config.js` contains only public values.
+
+## 12. Testing and Verification
+
+### 12.1 Strategy
 
 Testing combines:
 
 1. backend unit and integration tests using `unittest` and FastAPI's TestClient;
 2. static analysis and production builds for the frontend;
 3. browser-level end-to-end checks with headless Chrome;
-4. live GitHub API audits against public repositories;
-5. database checks against Supabase PostgreSQL;
-6. webhook signature and event-filter tests;
-7. PDF content and validity checks.
+4. extension popup and service-worker checks;
+5. live GitHub API audits against public repositories;
+6. database checks against Supabase PostgreSQL;
+7. webhook signature and event-filter tests;
+8. PDF content and validity checks.
 
-### 11.2 Backend Test Inventory
+### 12.2 Backend Test Inventory
 
-22 tests pass. They cover:
+25 tests pass. They cover:
 
 | Module | Coverage |
 |---|---|
@@ -901,11 +1111,18 @@ Testing combines:
 | `test_phase3_workload.py` | Queue reconstruction, threshold arithmetic, closed PR exclusion, missing median |
 | `test_phase4_persistence.py` | Idempotent upsert, review deduplication, webhook HMAC, event filtering, review merging |
 | `test_phase4_reporting.py` | v2 payload with null medians, legacy payload compatibility |
+| `test_extension_oauth.py` | Extension exchange config, redirect validation, missing code |
 
-### 11.3 Frontend Verification
+### 12.3 Frontend Verification
 
 - `oxlint` completes with no warnings.
 - `vite build` succeeds; the main bundle is approximately 707 KB (193 KB gzip).
+- Extension popup mocks confirm public mode sends no `Authorization` header,
+  signed-in mode sends a bearer token, inline validation replaces alerts, OAuth
+  cancellation errors are stored, and a completed audit is restored after the
+  popup reopens.
+- A service-worker harness confirms `RUN_AUDIT` stores loading state, sends the
+  user token, and transitions to done.
 - Headless Chrome checks confirm:
   - landing page renders;
   - role routes show the auth gate;
@@ -917,7 +1134,7 @@ Testing combines:
   - deep links resolve;
   - no console errors.
 
-### 11.4 Live API Verification
+### 12.4 Live API Verification
 
 Small live samples were used to validate the pipeline:
 
@@ -931,7 +1148,11 @@ Small live samples were used to validate the pipeline:
 A larger `fastapi/fastapi` audit persisted 25 PRs to PostgreSQL and was returned by
 `/api/history`, confirming the persistence path.
 
-### 11.5 Webhook Verification
+Live extension-path timings were approximately 22 seconds for a 25-PR audit and
+39 seconds for a 50-PR audit, excluding cold start. The extension now requests 25
+PRs by default.
+
+### 12.5 Webhook Verification
 
 - A valid HMAC with `X-GitHub-Event: ping` returned `200 {"pong": true}`.
 - An invalid signature returned `401`.
@@ -939,20 +1160,21 @@ A larger `fastapi/fastapi` audit persisted 25 PRs to PostgreSQL and was returned
 - Missing `GITHUB_WEBHOOK_SECRET` returns `503` rather than accepting unverified
   events.
 
-### 11.6 Deployment Verification
+### 12.6 Deployment Verification
 
 - Supabase `/auth/v1/settings` reports the GitHub provider enabled.
 - The Supabase authorize endpoint redirects to GitHub with the correct client ID,
   callback, and scopes.
 - PostgreSQL schema creation succeeds with all Phase 3 columns.
 - `VITE_SUPABASE_ANON_KEY` is configured for the Pages build.
+- The extension origin is accepted by backend CORS.
 - A full human OAuth login remains the final manual check.
 
 ---
 
-## 12. Results and Discussion
+## 13. Results and Discussion
 
-### 12.1 What the System Demonstrates
+### 13.1 What the System Demonstrates
 
 The implementation demonstrates four shifts from a naive review dashboard:
 
@@ -965,7 +1187,7 @@ The implementation demonstrates four shifts from a naive review dashboard:
 4. **From a single dashboard to role workflows.** Contributors, reviewers, and
    managers see different tasks over the same data.
 
-### 12.2 Case Study: `fastapi/fastapi`
+### 13.2 Case Study: `fastapi/fastapi`
 
 A 10-PR sample produced seven merged PRs, two closed unmerged, and one open PR. No
 first human review appeared in the sample, so all ten observations were censored.
@@ -977,7 +1199,7 @@ This case illustrates a strength of the design: the system does not invent a med
 when no events are observed. It reports censoring, coverage, and warnings instead of
 a false precision.
 
-### 12.3 Case Study: `django/django`
+### 13.3 Case Study: `django/django`
 
 An 8-PR sample contained three observed first reviews (1.39 h, 0.77 h, 18.23 h) and
 five censored PRs. The observed median was 1.39 h. Workload coverage was 0% because
@@ -988,13 +1210,28 @@ assert a queue.
 This case shows the value and the limits of the workload proxy: absence of evidence
 is surfaced rather than treated as an empty queue.
 
-### 12.4 Case Study: `pallets/flask` and `kubernetes/kubernetes`
+### 13.4 Case Study: `pallets/flask` and `kubernetes/kubernetes`
 
 Recent samples contained no first reviews, leaving all PRs censored. Cohort counts
 and warnings were still produced. The UI remains useful as a queue view, but no
 latency baseline is claimed. This is the correct statistical behaviour.
 
-### 12.5 Performance
+### 13.5 Extension Validation
+
+The extension was tested in three layers. Mocked popup tests verified public and
+signed-in requests, inline validation, cancellation feedback, and result
+restoration. A service-worker harness verified that `RUN_AUDIT` writes a loading
+state, forwards the user token, and completes into storage. Live backend checks
+confirmed that no bearer uses the server token while an invalid bearer is
+rejected, and that a user token takes precedence for private repositories.
+
+The state-persistence design addresses a concrete browser constraint: Chrome
+closes an extension popup when focus moves to the OAuth window or anywhere else.
+Audits now run in the service worker, and the popup restores loading, done, or
+error state from storage when it reopens. A 25-PR audit completed in about 22
+seconds and a 50-PR audit in about 39 seconds in live measurements.
+
+### 13.6 Performance
 
 - Enrichment is parallelized in small batches to reduce wall-clock time.
 - The five-minute cache avoids repeated identical audits.
@@ -1005,7 +1242,7 @@ latency baseline is claimed. This is the correct statistical behaviour.
 - Schema creation against the pooled Postgres connection took several seconds on
   first startup, then reused the schema.
 
-### 12.6 Threats to Validity
+### 13.7 Threats to Validity
 
 - **Sampling bias.** Recent PRs are not a random sample of repository history.
 - **Incomplete review-request history.** The queue proxy is bounded by the sampled
@@ -1021,22 +1258,22 @@ latency baseline is claimed. This is the correct statistical behaviour.
 
 ---
 
-## 13. Ethics, Privacy, and Governance
+## 14. Ethics, Privacy, and Governance
 
-### 13.1 Blame-Free Framing
+### 14.1 Blame-Free Framing
 
 The UI and report repeatedly state that signals describe process patterns, not
 individual performance. Shorter review time is not equated with better review, and
 longer review time is not attributed to a person's competence. The ethical
 safeguards view documents this boundary.
 
-### 13.2 Data Minimization
+### 14.2 Data Minimization
 
 The system stores public GitHub metadata, review events, and PR scope. It does not
 store code diffs or review comment bodies except when a webhook payload provides
 them. It does not post, approve, merge, or modify repositories.
 
-### 13.3 Token Security
+### 14.3 Token Security
 
 - Backend OAuth tokens are encrypted with Fernet before storage.
 - Session IDs are hashed before storage.
@@ -1046,14 +1283,14 @@ them. It does not post, approve, merge, or modify repositories.
 - Secrets are supplied through environment variables and excluded from version
   control.
 
-### 13.4 Access Control Gap
+### 14.4 Access Control Gap
 
 The current role system separates views by route and requires authentication, but it
 does not enforce role membership. A signed-in contributor can open the manager
 route. True RBAC would require a role source, per-route checks, and backend
 authorization. This is documented as a limitation rather than hidden.
 
-### 13.5 Data Retention
+### 14.5 Data Retention
 
 The database retains PR metadata and review events indefinitely unless an operator
 deletes them. A production deployment should define retention, deletion, and export
@@ -1061,9 +1298,9 @@ policies, especially for private repositories.
 
 ---
 
-## 14. Limitations and Future Work
+## 15. Limitations and Future Work
 
-### 14.1 Known Limitations
+### 15.1 Known Limitations
 
 1. **No true role-based access control.** Routes are auth-gated but not role-gated.
 2. **Sampled queue proxy.** Reviewer workload is reconstructed only from sampled PRs
@@ -1080,7 +1317,7 @@ policies, especially for private repositories.
    retained from earlier phases and are not on the live audit path.
 8. **Small live samples.** Validation did not run a large statistical study.
 
-### 14.2 Future Work
+### 15.2 Future Work
 
 - Implement RBAC with a `role` column or Supabase `app_metadata`, backend
   dependencies, and per-route guards.
@@ -1092,10 +1329,13 @@ policies, especially for private repositories.
 - Add automated browser tests to CI.
 - Add accessibility and internationalization audits.
 - Add retention/deletion controls for private data.
+- Publish the extension to the Chrome Web Store and Edge Add-ons.
+- Add an async audit-job API so extension results survive worker termination.
+- Store extension tokens in a more protected credential store.
 
 ---
 
-## 15. Conclusion
+## 16. Conclusion
 
 RevAudit replaces a flat time-to-merge metric with a censoring-aware measure of
 review queue latency. It controls for PR scope, models reviewer activity, reports
@@ -1115,7 +1355,7 @@ provides a solid, deployable foundation for those extensions.
 
 ---
 
-## 16. References
+## 17. References
 
 1. GitHub REST API documentation. <https://docs.github.com/en/rest>
 2. Kaplan, E. L., & Meier, P. (1958). Nonparametric Estimation from Incomplete
@@ -1134,6 +1374,10 @@ provides a solid, deployable foundation for those extensions.
 13. GitHub Pages documentation.
     <https://docs.github.com/en/pages>
 14. ReportLab documentation. <https://docs.reportlab.com/>
+15. Chrome Extensions Manifest V3 documentation.
+    <https://developer.chrome.com/docs/extensions/develop/migrate>
+16. GitHub OAuth documentation.
+    <https://docs.github.com/en/apps/oauth-apps>
 
 ---
 
@@ -1160,6 +1404,13 @@ Response highlights: `owner`, `repo`, `total_prs_in_sample`,
 
 Query parameters: `owner`, `repo`, `limit` (1–500). Returns`stored`,
 `last_synced_at`, `stored_prs_count`, and persisted PR rows with review events.
+
+### `POST /api/github/oauth/exchange`
+
+Body: `{ "code": "...", "redirect_uri": "https://<extension-id>.chromiumapp.org/" }`.
+Exchanges a Chrome extension OAuth code using the server-side client secret and
+returns `{ access_token, token_type, scope }`. Returns `503` when the OAuth client
+is not configured.
 
 ### `POST /api/webhook/github`
 
@@ -1231,6 +1482,15 @@ auth_sessions
 | `VITE_SUPABASE_URL` | Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | Public anon/publishable key |
 
+### Extension
+
+| Setting | Purpose |
+|---|---|
+| `GITHUB_CLIENT_ID` | Public OAuth App client ID in `extension/config.js`; also set on Render |
+| `GITHUB_CLIENT_SECRET` | Server-side secret used by `/api/github/oauth/exchange` |
+| Extension redirect URI | `https://iomendeapkpepmlapflpdjnogjapccff.chromiumapp.org/` |
+| `API_BASE_URL` | Render origin or `http://localhost:8000` |
+
 ---
 
 ## Appendix D — Test Inventory
@@ -1263,6 +1523,19 @@ backend/tests/test_phase4_persistence.py
 backend/tests/test_phase4_reporting.py
   - v2 payload with missing medians
   - legacy payload compatibility
+
+backend/tests/test_extension_oauth.py
+  - missing client configuration returns 503
+  - invalid redirect URI is rejected
+  - missing code is rejected
+
+Extension checks (browser/mock harness)
+  - public mode omits Authorization
+  - signed-in mode sends the bearer token
+  - inline validation replaces alerts
+  - OAuth cancellation is shown on reopen
+  - completed audit state is restored
+  - background RUN_AUDIT stores loading/done state
 ```
 
 Run:
@@ -1305,6 +1578,12 @@ python -m unittest discover -s tests -v
 # Production build
 cd ../frontend
 npm run build
+
+# Extension
+# 1. chrome://extensions -> Developer mode -> Load unpacked -> extension/
+# 2. Register the extension redirect URI on the GitHub OAuth App
+# 3. Set GITHUB_CLIENT_ID/GITHUB_CLIENT_SECRET on Render
+# 4. Set the Analysis API to http://localhost:8000 for local testing
 ```
 
 ---
@@ -1322,6 +1601,10 @@ npm run build
 | **Active queue** | Sampled PRs open at a ready time with a review request for the eventual reviewer |
 | **Triage signal** | A flagged PR for human process investigation, not a quality verdict |
 | **Demo mode** | A session-scoped bypass for local demonstrations |
+| **MV3** | Chrome Manifest V3 extension platform |
+| **Service worker** | Background extension context used for OAuth and audits |
+| **OAuth exchange** | Server-side exchange of an authorization code for a token |
+| **Provider token** | GitHub access token obtained through OAuth |
 
 ---
 

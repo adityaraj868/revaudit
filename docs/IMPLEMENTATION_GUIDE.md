@@ -293,8 +293,46 @@ Production runs the frontend on GitHub Pages and the API on Render:
   `GITHUB_WEBHOOK_SECRET`, and the Postgres connection string.
 - **GitHub Pages**: `.github/workflows/deploy-frontend.yml` builds with
   `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, and the
-  `VITE_SUPABASE_ANON_KEY` repository secret. The workflow deploys from `main`.
+  `VITE_SUPABASE_ANON_KEY` repository secret. The workflow deploys from the
+  `deploy` branch.
 - **Webhook**: `https://revaudit-backend.onrender.com/api/webhook/github` with
   the same secret used by Render.
 
 See the Deployment section in `README.md` for the step-by-step setup.
+
+## 14. Browser extension
+
+The `extension/` folder is a Manifest V3 Chrome/Edge popup that uses the same
+FastAPI `/api/audit` endpoint. It has two modes:
+
+- **Public mode** — no login; public repositories only.
+- **Signed-in mode** — GitHub OAuth or a personal access token; private
+  repositories and the user's 5,000 req/hr budget.
+
+OAuth flow:
+
+1. The popup requests `START_OAUTH` from the background service worker.
+2. The worker calls `chrome.identity.launchWebAuthFlow` with the public OAuth
+   client ID and a random state.
+3. GitHub returns a code to the extension.
+4. The worker sends the code to `POST /api/github/oauth/exchange`.
+5. The backend exchanges it with `GITHUB_CLIENT_SECRET` and returns only the
+   token.
+6. The worker stores `gh_auth` in `chrome.storage.local`.
+
+Audits run in the service worker, not the popup. `RUN_AUDIT` writes a loading
+state to `chrome.storage.local`, calls `/api/audit` with an optional bearer
+token, and stores the completed payload. Reopening the popup restores loading,
+done, or error state; this is why clicking away no longer loses an audit.
+
+Configuration:
+
+- Fixed extension ID: `iomendeapkpepmlapflpdjnogjapccff`
+- OAuth redirect: `https://iomendeapkpepmlapflpdjnogjapccff.chromiumapp.org/`
+- Render: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`
+- Extension: `extension/config.js` (public client ID and API base)
+- API base can be changed in the popup's advanced settings, e.g.
+  `http://localhost:8000`.
+
+The extension requests 25 PRs per audit. It does not inject content scripts and
+does not run its own statistics.
