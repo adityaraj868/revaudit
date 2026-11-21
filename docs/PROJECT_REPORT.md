@@ -222,11 +222,14 @@ previously represented only in the architecture diagrams and upgrade plan:
    manager report.
 8. **Reporting:** The audit payload can be exported through the ReportLab
    endpoint or printed natively from the manager dashboard.
+9. **Browser extension:** A Manifest V3 popup supports public mode and
+   GitHub OAuth/PAT sign-in, calls the same v2 audit endpoint, and persists audit
+   state in the service worker so closing the popup does not cancel an audit.
 
 Remaining production work includes organisation-level authorization (role
 claims rather than route selection), GitHub App installation tokens and webhook
-delivery retries, and load/performance testing against large real-world
-histories.
+delivery retries, Chrome Web Store publication for the extension, and
+load/performance testing against large real-world histories.
 
 ---
 
