@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "RevAudit \u2014 GitHub Review Auditor",
-  "version": "1.1.0",
-  "description": "Audits GitHub pull request review turnaround with public guest mode and optional GitHub sign-in for private repos.",
+  "version": "1.2.0",
+  "description": "Audits GitHub review latency with public or signed-in access using the censoring-aware RevAudit API.",
   "permissions": [
     "activeTab",
     "tabs",
@@ -11,7 +11,10 @@
   ],
   "host_permissions": [
     "https://api.github.com/*",
-    "https://github.com/*"
+    "https://github.com/*",
+    "https://revaudit-backend.onrender.com/*",
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*"
   ],
   "action": {
     "default_popup": "popup.html",

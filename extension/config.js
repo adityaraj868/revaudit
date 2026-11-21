@@ -6,4 +6,5 @@
 window.REVAUDIT_CONFIG = {
   GITHUB_CLIENT_ID: 'Ov23liJmnjUhTCVjcHR8',
   GITHUB_OAUTH_SCOPES: 'repo read:user',
+  API_BASE_URL: 'https://revaudit-backend.onrender.com',
 };

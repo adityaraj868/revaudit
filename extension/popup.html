@@ -116,6 +116,19 @@
           <p id="device-flow-status" class="device-flow-status">Waiting for authorization…</p>
         </div>
 
+        <!-- Analysis API endpoint -->
+        <div class="api-config-card">
+          <div class="method-header">
+            <h4>Analysis API</h4>
+            <span class="badge-subtle">RevAudit backend</span>
+          </div>
+          <p class="method-sub">Censoring-aware analysis and persistence. Use <code>http://localhost:8000</code> for local development.</p>
+          <div class="input-with-button">
+            <input type="url" id="api-base-input" placeholder="https://revaudit-backend.onrender.com" autocomplete="off" spellcheck="false" />
+            <button id="save-api-base-btn" class="secondary-btn">Save</button>
+          </div>
+        </div>
+
         <div id="auth-feedback" class="auth-feedback"></div>
       </div>
     </div>
@@ -193,10 +206,12 @@
 
       <!-- Results state -->
       <div id="results-state" class="state-view hidden">
+        <div id="results-meta" class="results-meta"></div>
+
         <!-- Metric Summary Cards -->
         <div class="metric-grid">
           <div class="metric-card">
-            <span class="metric-label">Closed PRs</span>
+            <span class="metric-label">PRs sampled</span>
             <span class="metric-value" id="stat-total">0</span>
           </div>
           <div class="metric-card">
@@ -204,11 +219,11 @@
             <span class="metric-value" id="stat-merged">0</span>
           </div>
           <div class="metric-card">
-            <span class="metric-label">Median Latency</span>
+            <span class="metric-label">Median first review</span>
             <span class="metric-value highlight" id="stat-median">0h</span>
           </div>
           <div class="metric-card">
-            <span class="metric-label">Anomalies</span>
+            <span class="metric-label">Triage signals</span>
             <span class="metric-value alert" id="stat-anomalies">0</span>
           </div>
         </div>
@@ -217,7 +232,7 @@
         <section class="section-card">
           <div class="section-header">
             <h4>Size Cohort Baselines</h4>
-            <span class="badge-subtle">90% CI</span>
+            <span class="badge-subtle">95% CI</span>
           </div>
           <div class="cohort-list" id="cohort-list">
             <!-- Dynamically injected -->
@@ -234,12 +249,24 @@
             <!-- Dynamically injected -->
           </div>
         </section>
+
+        <!-- Reviewer Workload -->
+        <section class="section-card">
+          <div class="section-header">
+            <h4>Reviewer Workload</h4>
+            <span class="badge-subtle" id="workload-badge">—</span>
+          </div>
+          <div id="workload-body" class="workload-body"></div>
+        </section>
+
+        <!-- Data quality warnings -->
+        <div id="warnings-box" class="warnings-box hidden"></div>
       </div>
     </main>
 
     <!-- Footer -->
     <footer class="app-footer">
-      <span>RevAudit v1.1 • Public + OAuth</span>
+      <span>RevAudit v1.2 • Public + OAuth + Backend</span>
       <a href="https://github.com/adityaraj868/revaudit" target="_blank" rel="noopener">GitHub</a>
     </footer>
   </div>

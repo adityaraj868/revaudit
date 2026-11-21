@@ -55,6 +55,12 @@ const statAnomalies = document.getElementById('stat-anomalies');
 const cohortList = document.getElementById('cohort-list');
 const anomaliesList = document.getElementById('anomalies-list');
 const anomaliesCountBadge = document.getElementById('anomalies-count-badge');
+const resultsMeta = document.getElementById('results-meta');
+const workloadBody = document.getElementById('workload-body');
+const workloadBadge = document.getElementById('workload-badge');
+const warningsBox = document.getElementById('warnings-box');
+const apiBaseInput = document.getElementById('api-base-input');
+const saveApiBaseBtn = document.getElementById('save-api-base-btn');
 
 // Active Auth State in Memory
 let currentAuth = null;
@@ -228,12 +234,6 @@ async function detectCurrentGitHubTab() {
 // ==========================================
 // Statistical Calculations
 // ==========================================
-function categorizePrSize(bodyLength) {
-  if (bodyLength < 250) return 'Small';
-  if (bodyLength < 1000) return 'Medium';
-  return 'Large';
-}
-
 function calculateMedian(values) {
   if (!values || values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
@@ -242,12 +242,6 @@ function calculateMedian(values) {
     return sorted[mid];
   }
   return (sorted[mid - 1] + sorted[mid]) / 2;
-}
-
-function calculateStd(values, mean) {
-  if (!values || values.length <= 1) return 0;
-  const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / (values.length - 1);
-  return Math.sqrt(variance);
 }
 
 function formatHours(hours) {
@@ -265,230 +259,249 @@ function formatHours(hours) {
 // ==========================================
 // Main Pull Request Audit Workflow
 // ==========================================
+async function getApiBase() {
+  const stored = await chrome.storage.local.get('api_base_url');
+  const value =
+    stored.api_base_url ||
+    (window.REVAUDIT_CONFIG && window.REVAUDIT_CONFIG.API_BASE_URL) ||
+    'https://revaudit-backend.onrender.com';
+  return String(value).replace(/\/$/, '');
+}
+
 async function performAudit(owner, repo) {
   setViewState('loading');
   loadingTitle.textContent = `Auditing ${owner}/${repo}...`;
-  loadingSubtitle.textContent = 'Fetching closed pull requests from GitHub API...';
+  loadingSubtitle.textContent = 'Requesting censoring-aware analysis from the RevAudit API...';
 
-  const headers = {
-    'Accept': 'application/vnd.github.v3+json',
-    'User-Agent': 'RevAudit-Chrome-Extension'
-  };
-
+  const apiBase = await getApiBase();
   const token = currentAuth && currentAuth.token ? currentAuth.token : null;
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
+  const headers = { Accept: 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
 
-  const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls?state=closed&per_page=30`;
+  const url = `${apiBase}/api/audit?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}&limit=50`;
+  const slowTimer = setTimeout(() => {
+    loadingSubtitle.textContent =
+      'Waking up the analysis API… free-tier backends can take up to 60 seconds.';
+  }, 4000);
 
-  let prsData;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120000);
+  let data;
   try {
-    const response = await fetch(url, { headers });
-
-    // Update rate limits from response headers
-    const remainingHeader = response.headers.get('x-ratelimit-remaining');
-    const limitHeader = response.headers.get('x-ratelimit-limit');
-    const resetHeader = response.headers.get('x-ratelimit-reset');
-
-    if (remainingHeader && limitHeader && currentAuth) {
-      currentAuth.rate_limit = {
-        limit: parseInt(limitHeader, 10),
-        remaining: parseInt(remainingHeader, 10),
-        reset: parseInt(resetHeader, 10)
-      };
-      await chrome.storage.local.set({ gh_auth: currentAuth });
-      updateAuthUI(currentAuth);
-    }
-
-    if (response.status === 404) {
-      throw new Error(`Repository "${owner}/${repo}" was not found. If it is private, sign in with GitHub first.`);
-    } else if (response.status === 403) {
-      if (remainingHeader === '0') {
-        throw new Error('GitHub API rate limit (60/hr) exceeded. Click "Connect" above to sign in with GitHub for 5,000 calls/hr.');
+    const response = await fetch(url, { headers, signal: controller.signal, cache: 'no-store' });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`Repository "${owner}/${repo}" was not found. If it is private, sign in with GitHub first.`);
       }
-      throw new Error('Access denied by GitHub API (HTTP 403). Sign in with GitHub for private repositories, or retry after the rate limit resets.');
-    } else if (!response.ok) {
-      const errJson = await response.json().catch(() => ({}));
-      throw new Error(errJson.message || `GitHub API error (HTTP ${response.status})`);
+      if (response.status === 429) {
+        throw new Error(payload.detail || 'GitHub rate limit reached. Sign in for 5,000 req/hr or retry later.');
+      }
+      if (response.status === 403) {
+        throw new Error(payload.detail || 'Access denied. Sign in with a token that can read this repository.');
+      }
+      if (response.status === 401) {
+        throw new Error(
+          payload.detail ||
+            'The analysis API could not authenticate with GitHub. The backend token may be invalid; sign in or contact the operator.',
+        );
+      }
+      throw new Error(payload.detail || `RevAudit API failed (HTTP ${response.status}).`);
     }
-
-    prsData = await response.json();
+    data = payload;
   } catch (err) {
     setViewState('error');
-    errorMessage.textContent = err.message || 'Network error connecting to GitHub.';
+    errorMessage.textContent =
+      err.name === 'AbortError'
+        ? 'The analysis API timed out. It may be cold-starting; try again.'
+        : err.message || 'Network error connecting to the RevAudit API. Check the API base in the auth drawer.';
     return;
+  } finally {
+    clearTimeout(slowTimer);
+    clearTimeout(timeout);
   }
 
-  if (!Array.isArray(prsData) || prsData.length === 0) {
-    setViewState('error');
-    errorMessage.textContent = `No closed pull requests found for ${owner}/${repo}.`;
-    return;
-  }
-
-  loadingSubtitle.textContent = 'Calculating turnaround baselines and anomaly thresholds...';
-
-  const mergedPrs = prsData.filter(pr => pr.merged_at != null);
-
-  if (mergedPrs.length === 0) {
-    setViewState('error');
-    errorMessage.textContent = 'Found closed pull requests, but none of them were merged.';
-    return;
-  }
-
-  const processedPrs = mergedPrs.map(pr => {
-    const createdDt = new Date(pr.created_at);
-    const mergedDt = new Date(pr.merged_at);
-    const reviewTimeHours = Math.max(0.01, (mergedDt - createdDt) / (1000 * 3600));
-    const bodyLength = (pr.body || '').length;
-    const sizeCategory = categorizePrSize(bodyLength);
-    const author = (pr.user && pr.user.login) ? pr.user.login : 'unknown';
-
-    return {
-      number: pr.number,
-      title: pr.title,
-      html_url: pr.html_url,
-      author,
-      bodyLength,
-      sizeCategory,
-      reviewTimeHours: parseFloat(reviewTimeHours.toFixed(2)),
-      created_at: pr.created_at,
-      merged_at: pr.merged_at
-    };
-  });
-
-  const groups = { Small: [], Medium: [], Large: [] };
-  processedPrs.forEach(pr => {
-    if (groups[pr.sizeCategory]) groups[pr.sizeCategory].push(pr);
-  });
-
-  const baselineMedians = {};
-  const allReviewTimes = processedPrs.map(p => p.reviewTimeHours);
-  const overallMedian = calculateMedian(allReviewTimes);
-
-  ['Small', 'Medium', 'Large'].forEach(cat => {
-    const catPrs = groups[cat];
-    const cnt = catPrs.length;
-    if (cnt === 0) {
-      baselineMedians[cat] = { median_hours: 0, sample_size: 0, mock_ci_90: [0, 0] };
-      return;
-    }
-
-    const times = catPrs.map(p => p.reviewTimeHours);
-    const med = calculateMedian(times);
-    const mean = times.reduce((a, b) => a + b, 0) / cnt;
-    const std = calculateStd(times, mean);
-
-    let margin;
-    if (cnt > 1 && std > 0) {
-      margin = 1.645 * (std / Math.sqrt(cnt));
-    } else {
-      margin = med * 0.15;
-    }
-
-    const ciLower = Math.max(0, parseFloat((med - margin).toFixed(2)));
-    const ciUpper = parseFloat((med + margin).toFixed(2));
-
-    baselineMedians[cat] = {
-      median_hours: parseFloat(med.toFixed(2)),
-      sample_size: cnt,
-      mock_ci_90: [ciLower, ciUpper]
-    };
-  });
-
-  const anomalies = [];
-  processedPrs.forEach(pr => {
-    const cohort = baselineMedians[pr.sizeCategory];
-    const baselineMedian = (cohort && cohort.median_hours > 0) ? cohort.median_hours : overallMedian;
-
-    if (baselineMedian > 0) {
-      const threshold = baselineMedian * 1.5;
-      if (pr.reviewTimeHours > threshold) {
-        const ratio = (pr.reviewTimeHours / baselineMedian).toFixed(1);
-        anomalies.push({
-          ...pr,
-          baseline_median: baselineMedian,
-          threshold: parseFloat(threshold.toFixed(2)),
-          ratio: `${ratio}x`
-        });
-      }
-    }
-  });
-
-  anomalies.sort((a, b) => parseFloat(b.ratio) - parseFloat(a.ratio));
-
-  renderResults({
-    owner,
-    repo,
-    totalClosed: prsData.length,
-    mergedCount: mergedPrs.length,
-    overallMedian,
-    baselineMedians,
-    anomalies
-  });
-
+  renderResults(data);
   chrome.storage.local.set({ last_repo: { owner, repo } });
 }
 
 // Render Results View
 function renderResults(data) {
-  statTotal.textContent = data.totalClosed;
-  statMerged.textContent = data.mergedCount;
-  statMedian.textContent = formatHours(data.overallMedian);
-  statAnomalies.textContent = data.anomalies.length;
+  const metadata = data.metadata || {};
+  const isV2 =
+    metadata.analysis_version === '2.0.0' ||
+    data.first_review_observed_count !== undefined ||
+    data.workload_engine !== undefined;
 
+  const total = data.total_prs_in_sample ?? data.total_closed_prs ?? (Array.isArray(data.pull_requests) ? data.pull_requests.length : 0);
+  const merged = data.merged_prs_count ?? 0;
+  let overallMedian = data.observed_median_first_review_hours;
+  if (overallMedian == null && Array.isArray(data.pull_requests)) {
+    const values = data.pull_requests
+      .map((pr) => pr.first_review_latency_hours)
+      .filter((value) => value != null);
+    if (values.length) overallMedian = calculateMedian(values);
+  }
+  const anomalies = data.anomalies || [];
+
+  statTotal.textContent = total;
+  statMerged.textContent = merged;
+  statMedian.textContent = overallMedian == null ? '—' : formatHours(overallMedian);
+  statAnomalies.textContent = data.anomalies_count ?? anomalies.length;
+
+  const authLabel =
+    metadata.github_authenticated === true
+      ? 'authenticated'
+      : metadata.github_authenticated === false
+        ? 'unauthenticated'
+        : 'legacy response';
+  const versionLabel = metadata.analysis_version ? `analysis v${metadata.analysis_version}` : 'legacy API';
+  const sampleLabel = metadata.sample_limit_applied ? ` · sample ${metadata.sample_limit_applied}` : '';
+  resultsMeta.textContent = `${versionLabel} · ${authLabel}${sampleLabel}`;
+
+  const cohorts = isV2 ? ['Small', 'Medium', 'Large', 'Unknown'] : ['Small', 'Medium', 'Large'];
   cohortList.innerHTML = '';
-  ['Small', 'Medium', 'Large'].forEach(cat => {
-    const info = data.baselineMedians[cat];
+  cohorts.forEach((cat) => {
+    const info = (data.baseline_medians && data.baseline_medians[cat]) || {};
+    const sample = info.sample_size || 0;
+    const tagClass = cat.toLowerCase();
+    const observed = info.event_count != null ? ` · ${info.event_count} observed` : '';
+    const countText = `${sample === 1 ? '1 PR' : `${sample} PRs`}${observed}`;
+    const medianText =
+      sample > 0 && info.median_hours != null
+        ? formatHours(info.median_hours)
+        : info.estimate_status === 'median_not_reached'
+          ? 'Median not reached'
+          : 'No data';
+    const interval = info.confidence_interval_95 || info.mock_ci_90;
+    const intervalLabel = info.confidence_interval_95 ? '95% CI' : '90% CI';
+    const ciText =
+      Array.isArray(interval) && interval.length === 2 && sample > 0
+        ? `${intervalLabel}: ${formatHours(interval[0])} – ${formatHours(interval[1])}`
+        : sample > 0
+          ? 'CI unavailable'
+          : '–';
+
     const row = document.createElement('div');
     row.className = 'cohort-row';
-
-    const tagClass = cat.toLowerCase();
-    const countText = info.sample_size === 1 ? '1 PR' : `${info.sample_size} PRs`;
-    const medianText = info.sample_size > 0 ? formatHours(info.median_hours) : 'No data';
-    const ciText = info.sample_size > 0 ? `90% CI: ${formatHours(info.mock_ci_90[0])} – ${formatHours(info.mock_ci_90[1])}` : '–';
-
     row.innerHTML = `
       <div class="cohort-info">
-        <span class="cohort-tag ${tagClass}">${cat}</span>
-        <span class="cohort-count">${countText}</span>
+        <span class="cohort-tag ${tagClass}">${escapeHtml(cat)}</span>
+        <span class="cohort-count">${escapeHtml(countText)}</span>
       </div>
       <div class="cohort-stats">
-        <span class="cohort-median">${medianText}</span>
-        <span class="cohort-ci">${ciText}</span>
+        <span class="cohort-median">${escapeHtml(medianText)}</span>
+        <span class="cohort-ci">${escapeHtml(ciText)}</span>
       </div>
     `;
     cohortList.appendChild(row);
   });
 
   anomaliesList.innerHTML = '';
-  anomaliesCountBadge.textContent = `${data.anomalies.length} flagged`;
+  anomaliesCountBadge.textContent = `${data.anomalies_count ?? anomalies.length} flagged`;
 
-  if (data.anomalies.length === 0) {
+  if (anomalies.length === 0) {
     const emptyNotice = document.createElement('div');
     emptyNotice.className = 'no-anomalies';
-    emptyNotice.textContent = '✓ No review latency anomalies detected (all PRs reviewed within 1.5x baseline).';
+    emptyNotice.textContent = '✓ No adjusted triage signals detected in this sample.';
     anomaliesList.appendChild(emptyNotice);
   } else {
-    data.anomalies.forEach(item => {
+    anomalies.slice(0, 10).forEach((item) => {
+      const latency = item.review_time_hours ?? item.first_review_latency_hours ?? item.reviewTimeHours;
+      const cohortInfo = (data.baseline_medians && data.baseline_medians[item.size_category]) || {};
+      const baseline = item.group_median_hours ?? item.baseline_median ?? cohortInfo.median_hours ?? 0;
+      const expected = item.expected_first_review_hours;
+      const z = item.standardized_residual;
+      const parsedRatio =
+        item.anomaly_ratio ??
+        (baseline ? Number(latency) / Number(baseline) : parseFloat(item.ratio));
+      const ratioText = Number.isFinite(parsedRatio) ? `${parsedRatio.toFixed(1)}× baseline` : '—';
+      const metaParts = [`by @${item.author || 'unknown'}`, `${item.size_category || 'Unknown'} PR`];
+      if (expected != null) metaParts.push(`expected ${formatHours(expected)}`);
+      else if (baseline) metaParts.push(`baseline ${formatHours(baseline)}`);
+      if (z != null) metaParts.push(`z ${Number(z).toFixed(2)}`);
+
       const link = document.createElement('a');
       link.className = 'anomaly-item';
-      link.href = item.html_url;
+      link.href = /^https?:\/\//.test(item.html_url || '') ? item.html_url : '#';
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
 
       link.innerHTML = `
         <div class="anomaly-main">
-          <div class="anomaly-pr-title">#${item.number} ${escapeHtml(item.title)}</div>
-          <div class="anomaly-meta">by @${escapeHtml(item.author)} • ${item.sizeCategory} PR (baseline: ${formatHours(item.baseline_median)})</div>
+          <div class="anomaly-pr-title">#${escapeHtml(item.pr_number || item.number || '')} ${escapeHtml(item.title || '')}</div>
+          <div class="anomaly-meta">${escapeHtml(metaParts.join(' • '))}</div>
         </div>
         <div class="anomaly-stats">
-          <span class="anomaly-duration">${formatHours(item.reviewTimeHours)}</span>
-          <span class="anomaly-ratio">${item.ratio} baseline</span>
+          <span class="anomaly-duration">${escapeHtml(formatHours(latency))}</span>
+          <span class="anomaly-ratio">${escapeHtml(ratioText)}</span>
         </div>
       `;
       anomaliesList.appendChild(link);
     });
+  }
+
+  const workload = data.workload_summary || {};
+  const workloadEngine = data.workload_engine || {};
+  workloadBody.replaceChildren();
+
+  const addWorkloadItem = (label, value) => {
+    const item = document.createElement('div');
+    item.className = 'workload-item';
+    const key = document.createElement('span');
+    key.textContent = label;
+    const val = document.createElement('strong');
+    val.textContent = value;
+    item.append(key, val);
+    workloadBody.appendChild(item);
+  };
+
+  if (Object.keys(workload).length || Object.keys(workloadEngine).length) {
+    addWorkloadItem('Avg queue', workload.average_concurrent_prs == null ? '—' : Number(workload.average_concurrent_prs).toFixed(1));
+    addWorkloadItem('Max queue', String(workload.max_concurrent_prs ?? '—'));
+    addWorkloadItem(
+      'Correlation',
+      workload.correlation_with_first_review_hours == null
+        ? '—'
+        : Number(workload.correlation_with_first_review_hours).toFixed(2),
+    );
+    addWorkloadItem('Workload flags', String(workloadEngine.flagged_count ?? '—'));
+    addWorkloadItem(
+      'Request coverage',
+      workloadEngine.request_coverage_pct == null ? '—' : `${Number(workloadEngine.request_coverage_pct).toFixed(1)}%`,
+    );
+    addWorkloadItem('Review events', String(workload.review_event_count ?? '—'));
+    const note = document.createElement('div');
+    note.className = 'workload-note';
+    note.textContent =
+      workloadEngine.limitation ||
+      workload.definition ||
+      'Workload is an inferred queue proxy, not a complete assignment history.';
+    workloadBody.appendChild(note);
+    workloadBadge.textContent = workloadEngine.flagged_count != null
+      ? `${workloadEngine.flagged_count} flagged`
+      : 'snapshot';
+  } else {
+    const note = document.createElement('div');
+    note.className = 'workload-note';
+    note.textContent = 'Workload summary is not available in this API response.';
+    workloadBody.appendChild(note);
+    workloadBadge.textContent = '—';
+  }
+
+  const warnings = [...(data.data_quality && data.data_quality.warnings ? data.data_quality.warnings : [])];
+  if (metadata.partial && metadata.partial_reason) warnings.unshift(`Partial audit: ${metadata.partial_reason}`);
+  if (metadata.sample_limit_note) warnings.push(metadata.sample_limit_note);
+  warningsBox.hidden = warnings.length === 0;
+  warningsBox.replaceChildren();
+  if (warnings.length) {
+    const list = document.createElement('ul');
+    warnings.slice(0, 4).forEach((warning) => {
+      const li = document.createElement('li');
+      li.textContent = warning;
+      list.appendChild(li);
+    });
+    warningsBox.appendChild(list);
   }
 
   setViewState('results');
@@ -549,6 +562,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     clientIdInput.value = configuredClientId;
   }
 
+  const storedApi = await chrome.storage.local.get('api_base_url');
+  apiBaseInput.value =
+    storedApi.api_base_url ||
+    (window.REVAUDIT_CONFIG && window.REVAUDIT_CONFIG.API_BASE_URL) ||
+    'https://revaudit-backend.onrender.com';
+
   // 2. Tab Detection
   const detected = await detectCurrentGitHubTab();
   if (!detected && stored.last_repo) {
@@ -577,6 +596,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   closeAuthDrawer.addEventListener('click', () => {
     authDrawer.classList.add('hidden');
+  });
+
+  saveApiBaseBtn.addEventListener('click', async () => {
+    const value = apiBaseInput.value.trim();
+    if (!/^https?:\/\//i.test(value)) {
+      authFeedback.className = 'auth-feedback error';
+      authFeedback.textContent = 'The API URL must start with http:// or https://.';
+      return;
+    }
+    const normalised = value.replace(/\/$/, '');
+    await chrome.storage.local.set({ api_base_url: normalised });
+    apiBaseInput.value = normalised;
+    authFeedback.className = 'auth-feedback success';
+    authFeedback.textContent = 'Analysis API saved.';
+    setTimeout(() => { authFeedback.textContent = ''; }, 1200);
   });
 
   // 4. Token Verification (Method 1)
