@@ -61,6 +61,11 @@ public audits still work within GitHub’s limits.
 You can close the popup while GitHub is open; the background service worker
 finishes the token exchange and stores the session. Reopen the popup to see it.
 
+Chrome closes the extension popup when the GitHub authorization window takes
+focus. If you cancel or close the GitHub window, reopen the extension: the auth
+drawer shows the cancellation error and the toolbar icon gets a red `!` badge.
+Starting sign-in again clears it.
+
 ### One-time operator setup
 
 The extension uses GitHub’s OAuth web flow. The client secret stays on the

@@ -641,6 +641,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 5. GitHub OAuth (redirect flow; token exchange happens on the backend)
   oauthLoginBtn.addEventListener('click', async () => {
     oauthLoginBtn.disabled = true;
+    sendMessage({ type: 'CLEAR_OAUTH_ERROR' }).catch(() => null);
     authFeedback.className = 'auth-feedback';
     authFeedback.textContent = 'Opening GitHub…';
     try {
@@ -662,13 +663,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // If the popup was closed during authorization, show a resume hint on reopen.
+  // When the auth window opens, the popup closes. Show the result on reopen:
+  // a cancellation error, a pending flow, or a completed sign-in.
   try {
-    const pending = await chrome.storage.session.get('revaudit_oauth_pending');
-    if (pending.revaudit_oauth_pending && !(currentAuth && currentAuth.token)) {
-      authDrawer.classList.remove('hidden');
-      authFeedback.className = 'auth-feedback';
-      authFeedback.textContent = 'Finish signing in on GitHub, then reopen this popup.';
+    const sessionState = await chrome.storage.session.get([
+      'revaudit_oauth_pending',
+      'revaudit_oauth_error',
+    ]);
+    if (!(currentAuth && currentAuth.token)) {
+      if (sessionState.revaudit_oauth_error && sessionState.revaudit_oauth_error.message) {
+        authDrawer.classList.remove('hidden');
+        authFeedback.className = 'auth-feedback error';
+        authFeedback.textContent = sessionState.revaudit_oauth_error.message;
+      } else if (sessionState.revaudit_oauth_pending) {
+        authDrawer.classList.remove('hidden');
+        authFeedback.className = 'auth-feedback';
+        authFeedback.textContent = 'Finish signing in on GitHub, then reopen this popup.';
+      }
     }
   } catch {
     // storage.session may be unavailable on older browsers

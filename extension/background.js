@@ -11,6 +11,7 @@ importScripts('config.js');
 const AUTH_KEY = 'gh_auth';
 const PENDING_KEY = 'revaudit_oauth_pending';
 const STATE_KEY = 'revaudit_oauth_state';
+const ERROR_KEY = 'revaudit_oauth_error';
 const USER_URL = 'https://api.github.com/user';
 const RATE_LIMIT_URL = 'https://api.github.com/rate_limit';
 
@@ -140,9 +141,26 @@ async function startOAuth() {
 
   const auth = await buildAuth(payload.access_token);
   await chrome.storage.local.set({ [AUTH_KEY]: auth });
-  await chrome.storage.session.remove([STATE_KEY, PENDING_KEY]);
+  await chrome.storage.session.remove([STATE_KEY, PENDING_KEY, ERROR_KEY]);
   await chrome.action.setBadgeText({ text: '' });
+  await chrome.action.setTitle({ title: 'RevAudit' });
   return auth;
+}
+
+async function recordOAuthError(message) {
+  await chrome.storage.session.set({
+    [ERROR_KEY]: { message, at: Date.now() },
+  });
+  await chrome.storage.session.remove(PENDING_KEY);
+  await chrome.action.setBadgeText({ text: '!' });
+  await chrome.action.setBadgeBackgroundColor({ color: '#ef4444' });
+  await chrome.action.setTitle({ title: 'RevAudit — GitHub sign-in failed' });
+}
+
+async function clearOAuthError() {
+  await chrome.storage.session.remove(ERROR_KEY);
+  await chrome.action.setBadgeText({ text: '' });
+  await chrome.action.setTitle({ title: 'RevAudit' });
 }
 
 async function getState() {
@@ -157,7 +175,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
     switch (message?.type) {
       case 'START_OAUTH':
-        return { auth: await startOAuth() };
+        try {
+          return { auth: await startOAuth() };
+        } catch (error) {
+          await recordOAuthError(error.message || 'GitHub sign-in failed.');
+          throw error;
+        }
+      case 'CLEAR_OAUTH_ERROR':
+        await clearOAuthError();
+        return {};
       case 'GET_AUTH_STATE':
         return await getState();
       case 'VERIFY_TOKEN':
