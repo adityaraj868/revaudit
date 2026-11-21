@@ -7,7 +7,7 @@
 
 ## 🌟 Key Features
 * **Statistically Controlled Review Baselines**: Segments pull requests into Small/Medium/Large/Unknown cohorts using changed lines and files, then estimates first-review latency with Kaplan–Meier medians and bootstrap 95% confidence intervals.
-* **Outlier & Anomaly Detection**: Flags process signals using robust Huber residuals (|z| ≥ 2.5) and a workload-adjusted ratio threshold (`1.5 + 0.15 × active queue`).
+* **Outlier & Anomaly Detection**: Flags process signals using robust Huber residuals (\|z\| ≥ 2.5) and a workload-adjusted ratio threshold (`1.5 + 0.15 × active queue`).
 * **Live Ingestion**: Paginates GitHub's REST API v3, enriches PRs with change stats and timeline events, keeps open/unreviewed PRs as right-censored observations, and handles rate limits.
 * **Paginated Review History**: Follows GitHub Link headers, syncs review events, and mirrors completed audits into the relational database.
 * **GitHub OAuth**: Optional sign-in stores the GitHub token encrypted server-side so private/restricted audits can use the user's permissions.
