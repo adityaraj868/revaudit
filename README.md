@@ -64,14 +64,23 @@ From the repository root, `./run-dev.sh` starts the supported FastAPI + React
 stack together. Configure `VITE_API_BASE_URL` only when the frontend should use
 a backend other than the local `http://localhost:8000` during development.
 
-### 4. Implementation walkthrough
+### 4. Chrome Extension (Manifest V3 Popup)
+
+A standalone, zero-dependency Chrome extension is available in `extension/` for auditing GitHub repositories directly from your browser:
+
+1. Open `chrome://extensions/` in Chrome, Brave, or Edge.
+2. Toggle on **Developer mode** (top-right).
+3. Click **Load unpacked** (top-left) and select the `extension/` directory.
+4. Open any GitHub repository in your browser and click the **RevAudit** extension icon to audit PRs with zero auth/database requirements. See [`extension/README.md`](extension/README.md) for details.
+
+### 5. Implementation walkthrough
 
 The step-by-step explanation of what each stage does and why it exists is in
 [`docs/IMPLEMENTATION_GUIDE.md`](docs/IMPLEMENTATION_GUIDE.md). It covers
 OAuth, pagination, review-event ingestion, workload modeling, PDF export,
 configuration, verification, and current limitations.
 
-### 5. API endpoints
+### 6. API endpoints
 
 | Endpoint | Purpose |
 |---|---|
