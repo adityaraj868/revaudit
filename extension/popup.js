@@ -19,16 +19,9 @@ const authDrawer = document.getElementById('auth-drawer');
 const closeAuthDrawer = document.getElementById('close-auth-drawer');
 const tokenInput = document.getElementById('token-input');
 const verifyTokenBtn = document.getElementById('verify-token-btn');
-const clientIdInput = document.getElementById('client-id-input');
 const oauthLoginBtn = document.getElementById('oauth-login-btn');
 const authFeedback = document.getElementById('auth-feedback');
 
-const devicePanel = document.getElementById('device-flow-panel');
-const deviceCode = document.getElementById('device-code');
-const deviceStatus = document.getElementById('device-flow-status');
-const copyDeviceBtn = document.getElementById('copy-device-code');
-const openDeviceBtn = document.getElementById('open-device-page');
-const cancelDeviceBtn = document.getElementById('cancel-device-flow');
 
 // DOM Elements - Repo & Actions
 const ownerInput = document.getElementById('owner-input');
@@ -64,8 +57,6 @@ const saveApiBaseBtn = document.getElementById('save-api-base-btn');
 
 // Active Auth State in Memory
 let currentAuth = null;
-let deviceState = null;
-let devicePollTimer = null;
 
 function sendMessage(message) {
   return new Promise((resolve, reject) => {
@@ -263,7 +254,7 @@ async function getApiBase() {
   const stored = await chrome.storage.local.get('api_base_url');
   const value =
     stored.api_base_url ||
-    (window.REVAUDIT_CONFIG && window.REVAUDIT_CONFIG.API_BASE_URL) ||
+    (globalThis.REVAUDIT_CONFIG && globalThis.REVAUDIT_CONFIG.API_BASE_URL) ||
     'https://revaudit-backend.onrender.com';
   return String(value).replace(/\/$/, '');
 }
@@ -555,18 +546,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  const configuredClientId =
-    stored.gh_client_id ||
-    (window.REVAUDIT_CONFIG && window.REVAUDIT_CONFIG.GITHUB_CLIENT_ID) ||
-    '';
-  if (configuredClientId) {
-    clientIdInput.value = configuredClientId;
-  }
-
   const storedApi = await chrome.storage.local.get('api_base_url');
   apiBaseInput.value =
     storedApi.api_base_url ||
-    (window.REVAUDIT_CONFIG && window.REVAUDIT_CONFIG.API_BASE_URL) ||
+    (globalThis.REVAUDIT_CONFIG && globalThis.REVAUDIT_CONFIG.API_BASE_URL) ||
     'https://revaudit-backend.onrender.com';
 
   // 2. Tab Detection
@@ -582,8 +565,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Disconnect
       await chrome.storage.local.remove(['gh_auth']);
       sendMessage({ type: 'CANCEL_DEVICE_FLOW' }).catch(() => null);
-      stopDevicePolling();
-      renderDevicePanel(null);
       tokenInput.value = '';
       updateAuthUI(null);
     } else {
@@ -631,8 +612,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       const authData = await verifyGitHubToken(rawToken);
       await chrome.storage.local.set({ gh_auth: authData });
       sendMessage({ type: 'CANCEL_DEVICE_FLOW' }).catch(() => null);
-      stopDevicePolling();
-      renderDevicePanel(null);
       updateAuthUI(authData);
 
       authFeedback.className = 'auth-feedback success';
@@ -650,93 +629,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // 5. GitHub OAuth Device Flow (Method 2)
-  function setDeviceStatus(kind, text) {
-    deviceStatus.className = 'device-flow-status' + (kind ? ` ${kind}` : '');
-    deviceStatus.textContent = text;
-  }
-
-  function stopDevicePolling() {
-    if (devicePollTimer) clearInterval(devicePollTimer);
-    devicePollTimer = null;
-  }
-
-  function renderDevicePanel(state) {
-    deviceState = state;
-    if (!state) {
-      devicePanel.classList.add('hidden');
-      return;
-    }
-    devicePanel.classList.remove('hidden');
-    deviceCode.textContent = state.user_code || '----';
-    if (state.status === 'pending') {
-      setDeviceStatus('', 'Waiting for authorization… You can close this popup, authorize on GitHub, and reopen it.');
-    } else if (state.status === 'authorized') {
-      setDeviceStatus('success', 'Authorized. Loading your GitHub profile…');
-    } else if (state.error) {
-      setDeviceStatus('error', state.error);
-    }
-  }
-
-  async function refreshDeviceState() {
-    try {
-      const response = await sendMessage({ type: 'GET_DEVICE_FLOW' });
-      const state = response.state;
-      if (!state) {
-        stopDevicePolling();
-        renderDevicePanel(null);
-        return;
-      }
-      renderDevicePanel(state);
-      if (state.status === 'authorized') {
-        stopDevicePolling();
-        const storedAuth = await chrome.storage.local.get('gh_auth');
-        if (storedAuth.gh_auth) {
-          updateAuthUI(storedAuth.gh_auth);
-          authFeedback.className = 'auth-feedback success';
-          authFeedback.textContent = `Connected as @${storedAuth.gh_auth.username}!`;
-          setTimeout(() => {
-            authDrawer.classList.add('hidden');
-            authFeedback.textContent = '';
-          }, 1200);
-        }
-      } else if (['error', 'denied', 'expired'].includes(state.status)) {
-        stopDevicePolling();
-      }
-    } catch (error) {
-      setDeviceStatus('error', error.message);
-    }
-  }
-
-  function startDevicePolling() {
-    stopDevicePolling();
-    devicePollTimer = setInterval(refreshDeviceState, 2000);
-    refreshDeviceState();
-  }
-
+  // 5. GitHub OAuth (redirect flow; token exchange happens on the backend)
   oauthLoginBtn.addEventListener('click', async () => {
-    const defaultClientId = (window.REVAUDIT_CONFIG && window.REVAUDIT_CONFIG.GITHUB_CLIENT_ID) || '';
-    const clientId = (clientIdInput.value.trim() || defaultClientId).trim();
-    if (!clientId) {
-      authFeedback.className = 'auth-feedback error';
-      authFeedback.textContent = 'Add a GitHub OAuth App Client ID first.';
-      return;
-    }
-    clientIdInput.value = clientId;
-    await chrome.storage.local.set({ gh_client_id: clientId });
     oauthLoginBtn.disabled = true;
     authFeedback.className = 'auth-feedback';
-    authFeedback.textContent = 'Requesting a GitHub device code…';
+    authFeedback.textContent = 'Opening GitHub…';
     try {
-      const response = await sendMessage({
-        type: 'START_DEVICE_FLOW',
-        clientId,
-        scopes: (window.REVAUDIT_CONFIG && window.REVAUDIT_CONFIG.GITHUB_OAUTH_SCOPES) || 'repo read:user',
-      });
-      renderDevicePanel(response.state);
-      authFeedback.className = 'auth-feedback';
-      authFeedback.textContent = 'Copy the code, open GitHub, and authorize this extension.';
-      startDevicePolling();
+      const response = await sendMessage({ type: 'START_OAUTH' });
+      if (response.auth) {
+        updateAuthUI(response.auth);
+        authFeedback.className = 'auth-feedback success';
+        authFeedback.textContent = `Connected as @${response.auth.username}!`;
+        setTimeout(() => {
+          authDrawer.classList.add('hidden');
+          authFeedback.textContent = '';
+        }, 1200);
+      }
     } catch (error) {
       authFeedback.className = 'auth-feedback error';
       authFeedback.textContent = error.message;
@@ -745,51 +653,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  copyDeviceBtn.addEventListener('click', async () => {
-    if (!deviceState?.user_code) return;
-    try {
-      await navigator.clipboard.writeText(deviceState.user_code);
-      copyDeviceBtn.textContent = 'Copied';
-      setTimeout(() => { copyDeviceBtn.textContent = 'Copy'; }, 1500);
-    } catch {
-      setDeviceStatus('error', 'Clipboard access failed. Select and copy the code manually.');
-    }
-  });
-
-  openDeviceBtn.addEventListener('click', () => {
-    if (!deviceState?.verification_uri) return;
-    chrome.tabs.create({ url: deviceState.verification_uri });
-  });
-
-  cancelDeviceBtn.addEventListener('click', async () => {
-    try {
-      await sendMessage({ type: 'CANCEL_DEVICE_FLOW' });
-    } catch {
-      // Ignore cancellation errors; hide the panel regardless.
-    }
-    stopDevicePolling();
-    renderDevicePanel(null);
-    authFeedback.className = 'auth-feedback';
-    authFeedback.textContent = 'Sign-in cancelled. Public mode is still available.';
-  });
-
-  // 5b. Resume a pending or completed device flow after the popup reopens.
+  // If the popup was closed during authorization, show a resume hint on reopen.
   try {
-    const storedFlow = await sendMessage({ type: 'GET_DEVICE_FLOW' });
-    if (storedFlow.state) {
-      renderDevicePanel(storedFlow.state);
-      if (storedFlow.state.status === 'pending') {
-        authDrawer.classList.remove('hidden');
-        startDevicePolling();
-      } else if (storedFlow.state.status === 'authorized') {
-        const storedAuth = await chrome.storage.local.get('gh_auth');
-        if (storedAuth.gh_auth) updateAuthUI(storedAuth.gh_auth);
-      } else if (storedFlow.state.error) {
-        authDrawer.classList.remove('hidden');
-      }
+    const pending = await chrome.storage.session.get('revaudit_oauth_pending');
+    if (pending.revaudit_oauth_pending && !(currentAuth && currentAuth.token)) {
+      authDrawer.classList.remove('hidden');
+      authFeedback.className = 'auth-feedback';
+      authFeedback.textContent = 'Finish signing in on GitHub, then reopen this popup.';
     }
   } catch {
-    // Background worker may not be awake yet; auth still works on demand.
+    // storage.session may be unavailable on older browsers
   }
 
   // 6. Action Handlers

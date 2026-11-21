@@ -35,6 +35,7 @@ from webhooks import (
 )
 
 API_VERSION = "2022-11-28"
+EXTENSION_REDIRECT_PATTERN = re.compile(r"^https://[a-p]{32}\.chromiumapp\.org/$")
 REQUEST_TIMEOUT_SECONDS = 20
 MAX_UNAUTHENTICATED_SAMPLE = 25
 CACHE_TTL_SECONDS = 300
@@ -445,6 +446,56 @@ def github_callback(
     request.session.clear()
     request.session["auth_session_id"] = session_id
     return redirect_to_frontend(auth="success")
+
+
+@app.post("/api/github/oauth/exchange")
+def github_extension_exchange(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    """Exchange a Chrome extension OAuth code for a GitHub access token.
+
+    The extension cannot keep a client secret, so the exchange happens here.
+    Only chromiumapp.org redirect URIs are accepted; GitHub also validates the
+    redirect URI against the OAuth App registration.
+    """
+    config = github_oauth_config()
+    code = str(payload.get("code") or "").strip()
+    redirect_uri = str(payload.get("redirect_uri") or "").strip()
+    if not code or not EXTENSION_REDIRECT_PATTERN.match(redirect_uri):
+        raise HTTPException(status_code=400, detail="Invalid OAuth code or redirect URI.")
+
+    try:
+        token_response = requests.post(
+            "https://github.com/login/oauth/access_token",
+            data={
+                "client_id": config["client_id"],
+                "client_secret": config["client_secret"],
+                "code": code,
+                "redirect_uri": redirect_uri,
+            },
+            headers={"Accept": "application/json"},
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"GitHub OAuth network error: {exc}") from exc
+
+    if token_response.status_code != 200:
+        raise HTTPException(status_code=502, detail="GitHub OAuth token exchange failed.")
+    try:
+        token_payload = token_response.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail="GitHub returned an invalid OAuth response.") from exc
+    access_token = token_payload.get("access_token")
+    if not access_token:
+        raise HTTPException(
+            status_code=400,
+            detail=token_payload.get("error_description")
+            or token_payload.get("error")
+            or "GitHub did not return an access token.",
+        )
+    return {
+        "access_token": access_token,
+        "token_type": token_payload.get("token_type", "bearer"),
+        "scope": token_payload.get("scope"),
+    }
 
 
 @app.get("/api/auth/me")

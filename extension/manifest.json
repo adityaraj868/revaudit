@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "RevAudit \u2014 GitHub Review Auditor",
-  "version": "1.2.0",
-  "description": "Audits GitHub review latency with public or signed-in access using the censoring-aware RevAudit API.",
+  "version": "1.3.0",
+  "description": "Audits GitHub review latency with public or signed-in GitHub OAuth access.",
   "permissions": [
     "activeTab",
     "tabs",
     "storage",
-    "clipboardWrite"
+    "clipboardWrite",
+    "identity"
   ],
   "host_permissions": [
     "https://api.github.com/*",
@@ -32,5 +33,6 @@
   },
   "background": {
     "service_worker": "background.js"
-  }
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsgh46mF9acOnRciTT4eNl0fP2GQlxaD+Ag0Vcs2QWVGLeuaCIXEZ04BewqPltPSVHr0qtr9b8nZhDJu273BHRlci/Yr/oqwXFAelT2uFqMSQGKAzg5TCjbRv/xGGrAD+QddBrlz81y3fzJE1MP+2HEcxWW3U93LtCCVUyVh1SB1K/zPrQ2WhJuf9J5jLvXKmaZ7OxpSFvFtK0IVe6zAGF6QOhpgX3jNmsAP4sdlqu4XhpPY1dLSCSq2Xig50pr7Fpii6jzbpNBGkmpl8GZqfGn/agqql74hsmJcmfMZ6JgYELPHH+l6JtuFymhTiQ0bzq+ioYSjDso209sY8qge+ZwIDAQAB"
 }

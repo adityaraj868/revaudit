@@ -71,7 +71,7 @@ A standalone, zero-dependency Chrome extension is available in `extension/` for 
 1. Open `chrome://extensions/` in Chrome, Brave, or Edge.
 2. Toggle on **Developer mode** (top-right).
 3. Click **Load unpacked** (top-left) and select the `extension/` directory.
-4. Open any GitHub repository and click the **RevAudit** icon. Public repositories work without login; sign in with GitHub OAuth Device Flow or a personal access token for private repositories and the 5,000 req/hr limit. Analysis runs on the RevAudit API, so the censoring-aware model and PostgreSQL persistence are shared with the web dashboard. See [`extension/README.md`](extension/README.md) for details.
+4. Open any GitHub repository and click the **RevAudit** icon. Public repositories work without login; sign in with GitHub OAuth or a personal access token for private repositories and the 5,000 req/hr limit. Analysis runs on the RevAudit API, so the censoring-aware model and PostgreSQL persistence are shared with the web dashboard. See [`extension/README.md`](extension/README.md) for details.
 
 ### 5. Implementation walkthrough
 

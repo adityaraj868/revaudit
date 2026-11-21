@@ -57,79 +57,59 @@
 
       <div class="drawer-content">
         <p class="drawer-desc">
-          <strong>Public mode</strong> works without signing in (60 requests/hour). Sign in only for <strong>private repositories</strong>, <strong>5,000 requests/hour</strong>, and full PR history.
+          <strong>Public mode</strong> works without signing in. Sign in with GitHub to analyze <strong>private repositories</strong> and raise your limit to <strong>5,000 requests/hour</strong>.
         </p>
 
-        <!-- Method 1: Token Auth (Fastest & most reliable in browser extensions) -->
-        <div class="auth-method-card">
-          <div class="method-header">
-            <h4>Personal access token or OAuth token</h4>
-            <span class="badge-recommended">Fastest</span>
-          </div>
-          <p class="method-sub">Paste a GitHub PAT or an OAuth access token with <code>repo</code> scope. Used only for GitHub API calls.</p>
-          
-          <div class="token-helper-row">
-            <a href="https://github.com/settings/tokens/new?description=RevAudit+Browser+Extension&scopes=repo" target="_blank" rel="noopener" class="gh-link-btn">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                <polyline points="15 3 21 3 21 9"></polyline>
-                <line x1="10" y1="14" x2="21" y2="3"></line>
-              </svg>
-              Generate Token on GitHub
-            </a>
-          </div>
-
-          <div class="input-with-button">
-            <input type="password" id="token-input" placeholder="ghp_xxxxxxxxxxxx or github_pat_xxxx" autocomplete="off" />
-            <button id="verify-token-btn" class="primary-btn">Connect</button>
-          </div>
-        </div>
-
-        <!-- Method 2: OAuth Device Flow -->
-        <div class="auth-method-card oauth-card">
+        <div class="auth-method-card oauth-card primary-auth-card">
           <div class="method-header">
             <h4>Sign in with GitHub</h4>
-            <span class="badge-subtle">OAuth Device Flow</span>
+            <span class="badge-subtle">OAuth</span>
           </div>
-          <p class="method-sub">No client secret is stored in the extension. The OAuth App must have Device Flow enabled.</p>
-          
-          <div class="input-with-button">
-            <input type="text" id="client-id-input" placeholder="OAuth Client ID (e.g. Ov23li...)" autocomplete="off" />
-            <button id="oauth-login-btn" class="secondary-btn">Sign In</button>
-          </div>
+          <p class="method-sub">You'll be redirected to GitHub to authorize read-only repository access.</p>
+          <button id="oauth-login-btn" class="primary-btn oauth-button" type="button">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+            </svg>
+            Sign in with GitHub
+          </button>
+          <div id="auth-feedback" class="auth-feedback"></div>
         </div>
 
-        <div id="device-flow-panel" class="device-flow-panel hidden">
-          <div class="method-header">
-            <h4>Authorize on GitHub</h4>
-            <span class="badge-subtle">Device Flow</span>
+        <details class="advanced-auth">
+          <summary>Use a personal access token instead</summary>
+          <div class="auth-method-card">
+            <p class="method-sub">Paste a GitHub PAT or OAuth token with <code>repo</code> scope. Used only for GitHub API calls.</p>
+            <div class="token-helper-row">
+              <a href="https://github.com/settings/tokens/new?description=RevAudit+Browser+Extension&scopes=repo" target="_blank" rel="noopener" class="gh-link-btn">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                  <polyline points="15 3 21 3 21 9"></polyline>
+                  <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
+                Generate Token on GitHub
+              </a>
+            </div>
+            <div class="input-with-button">
+              <input type="password" id="token-input" placeholder="ghp_xxxxxxxxxxxx or github_pat_xxxx" autocomplete="off" />
+              <button id="verify-token-btn" class="primary-btn">Connect</button>
+            </div>
           </div>
-          <p class="method-sub">Enter this code at <a href="https://github.com/login/device" target="_blank" rel="noopener">github.com/login/device</a>:</p>
-          <div class="device-code-row">
-            <code id="device-code">----</code>
-            <button id="copy-device-code" class="secondary-btn">Copy</button>
-          </div>
-          <div class="device-flow-actions">
-            <button id="open-device-page" class="primary-btn">Open GitHub</button>
-            <button id="cancel-device-flow" class="secondary-btn">Cancel</button>
-          </div>
-          <p id="device-flow-status" class="device-flow-status">Waiting for authorization…</p>
-        </div>
+        </details>
 
-        <!-- Analysis API endpoint -->
-        <div class="api-config-card">
-          <div class="method-header">
-            <h4>Analysis API</h4>
-            <span class="badge-subtle">RevAudit backend</span>
+        <details class="advanced-auth">
+          <summary>Advanced settings</summary>
+          <div class="api-config-card">
+            <div class="method-header">
+              <h4>Analysis API</h4>
+              <span class="badge-subtle">RevAudit backend</span>
+            </div>
+            <p class="method-sub">Use <code>http://localhost:8000</code> for local development.</p>
+            <div class="input-with-button">
+              <input type="url" id="api-base-input" placeholder="https://revaudit-backend.onrender.com" autocomplete="off" spellcheck="false" />
+              <button id="save-api-base-btn" class="secondary-btn">Save</button>
+            </div>
           </div>
-          <p class="method-sub">Censoring-aware analysis and persistence. Use <code>http://localhost:8000</code> for local development.</p>
-          <div class="input-with-button">
-            <input type="url" id="api-base-input" placeholder="https://revaudit-backend.onrender.com" autocomplete="off" spellcheck="false" />
-            <button id="save-api-base-btn" class="secondary-btn">Save</button>
-          </div>
-        </div>
-
-        <div id="auth-feedback" class="auth-feedback"></div>
+        </details>
       </div>
     </div>
 
@@ -266,7 +246,7 @@
 
     <!-- Footer -->
     <footer class="app-footer">
-      <span>RevAudit v1.2 • Public + OAuth + Backend</span>
+      <span>RevAudit v1.3 • Public + OAuth + Backend</span>
       <a href="https://github.com/adityaraj868/revaudit" target="_blank" rel="noopener">GitHub</a>
     </footer>
   </div>
