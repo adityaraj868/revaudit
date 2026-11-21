@@ -23,3 +23,7 @@ dist/
 *.swo
 .vscode/
 .idea/
+extension/config.js
+
+extension/*.pem
+extension/*.crx

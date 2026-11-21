@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "RevAudit \u2014 Review Effort Auditor",
+  "short_name": "RevAudit",
+  "version": "1.0.0",
+  "description": "Censoring-aware GitHub pull request review analysis with Supabase auth.",
+  "minimum_chrome_version": "116",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsgh46mF9acOnRciTT4eNl0fP2GQlxaD+Ag0Vcs2QWVGLeuaCIXEZ04BewqPltPSVHr0qtr9b8nZhDJu273BHRlci/Yr/oqwXFAelT2uFqMSQGKAzg5TCjbRv/xGGrAD+QddBrlz81y3fzJE1MP+2HEcxWW3U93LtCCVUyVh1SB1K/zPrQ2WhJuf9J5jLvXKmaZ7OxpSFvFtK0IVe6zAGF6QOhpgX3jNmsAP4sdlqu4XhpPY1dLSCSq2Xig50pr7Fpii6jzbpNBGkmpl8GZqfGn/agqql74hsmJcmfMZ6JgYELPHH+l6JtuFymhTiQ0bzq+ioYSjDso209sY8qge+ZwIDAQAB",
+  "action": {
+    "default_title": "RevAudit",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": [
+    "storage",
+    "tabs",
+    "identity",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "https://github.com/*",
+    "https://api.github.com/*",
+    "https://*.supabase.co/*",
+    "https://revaudit-backend.onrender.com/*",
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "homepage_url": "https://adityaraj868.github.io/revaudit/"
+}

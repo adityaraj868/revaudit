@@ -197,6 +197,7 @@ Set these environment variables in the Render dashboard:
 | `COOKIE_SECURE` | `true` |
 | `GITHUB_WEBHOOK_SECRET` | random string shared with the GitHub webhook |
 | `PERSIST_AUDITS` | `true` |
+| `EXTENSION_ORIGIN` | `chrome-extension://iomendeapkpepmlapflpdjnogjapccff` |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` / `GITHUB_REDIRECT_URI` | only if using the backend OAuth fallback instead of Supabase Auth |
 
 `FRONTEND_URL` is used twice: CORS takes its origin
@@ -245,6 +246,44 @@ Copy `backend/.env.example` → `backend/.env` and
 files are gitignored. For local-only work, omit Supabase auth variables and the
 backend OAuth fallback will be used; without `DATABASE_URL` the backend uses
 SQLite.
+
+---
+
+## 🧩 Browser Extension (Chrome/Edge)
+
+A Manifest V3 extension lives in [`extension/`](extension/). It signs in with
+Supabase GitHub OAuth and runs a repository audit from the toolbar popup using the
+same FastAPI + PostgreSQL backend.
+
+### Load it
+
+1. Open `chrome://extensions` → enable **Developer mode**.
+2. **Load unpacked** → select the `extension/` folder.
+3. The manifest contains a fixed public key, so the extension ID is
+   `iomendeapkpepmlapflpdjnogjapccff`.
+4. Add this redirect URL to Supabase → Authentication → URL Configuration →
+   Redirect URLs:
+   ```text
+   https://iomendeapkpepmlapflpdjnogjapccff.chromiumapp.org/supabase
+   ```
+
+### Use it
+
+- Click the toolbar icon → **Sign in with GitHub**.
+- Open a GitHub repository tab and click **Current tab**, or type `owner/repo`.
+- Pick a sample size and click **Analyze**.
+- Inspect cohort medians, censored counts, robust signals, and workload flags.
+- Use **Open full dashboard** for the complete React app.
+
+The API base defaults to the Render backend and can be changed to
+`http://localhost:8000` in **Extension setup**. `extension/config.js` is generated
+from `frontend/.env` locally and is gitignored; `config.example.js` is the template.
+
+The backend accepts the extension origin through `EXTENSION_ORIGIN` (already set
+to the fixed extension ID in `render.yaml`).
+
+See [`extension/README.md`](extension/README.md) for the auth flow, permissions,
+packaging, and limitations.
 
 ---
 
