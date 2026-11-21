@@ -12,6 +12,7 @@ const AUTH_KEY = 'gh_auth';
 const PENDING_KEY = 'revaudit_oauth_pending';
 const STATE_KEY = 'revaudit_oauth_state';
 const ERROR_KEY = 'revaudit_oauth_error';
+const AUDIT_KEY = 'revaudit_audit';
 const USER_URL = 'https://api.github.com/user';
 const RATE_LIMIT_URL = 'https://api.github.com/rate_limit';
 
@@ -147,6 +148,102 @@ async function startOAuth() {
   return auth;
 }
 
+async function getAuditState() {
+  const stored = await chrome.storage.local.get(AUDIT_KEY);
+  const state = stored[AUDIT_KEY] || null;
+  if (
+    state &&
+    state.status === 'loading' &&
+    state.startedAt &&
+    Date.now() - state.startedAt > 180_000
+  ) {
+    state.status = 'error';
+    state.error = 'The audit timed out. Try again.';
+    state.completedAt = Date.now();
+    await chrome.storage.local.set({ [AUDIT_KEY]: state });
+  }
+  return state;
+}
+
+async function finishAudit(id, patch) {
+  const stored = await chrome.storage.local.get(AUDIT_KEY);
+  const current = stored[AUDIT_KEY];
+  if (!current || current.id !== id) return;
+  const next = { ...current, ...patch };
+  await chrome.storage.local.set({ [AUDIT_KEY]: next });
+  chrome.runtime.sendMessage({ type: 'AUDIT_UPDATE', state: next }).catch(() => null);
+  if (next.status === 'done') {
+    const count = next.data?.anomalies_count ?? next.data?.anomalies?.length ?? 0;
+    await chrome.action.setBadgeText({ text: count > 0 ? String(count) : '' });
+    await chrome.action.setBadgeBackgroundColor({ color: '#f97316' });
+  }
+}
+
+async function runAudit(state) {
+  let timeout;
+  try {
+    const stored = await chrome.storage.local.get(AUTH_KEY);
+    const auth = stored[AUTH_KEY];
+    const token = auth && auth.token ? auth.token : null;
+    const apiBase = await getApiBase();
+    const headers = { Accept: 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const url = `${apiBase}/api/audit?owner=${encodeURIComponent(state.owner)}&repo=${encodeURIComponent(state.repo)}&limit=${state.limit}`;
+    const controller = new AbortController();
+    timeout = setTimeout(() => controller.abort(), 180_000);
+
+    const response = await fetch(url, {
+      headers,
+      signal: controller.signal,
+      cache: 'no-store',
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.detail || `RevAudit API failed (HTTP ${response.status}).`);
+    }
+    await finishAudit(state.id, {
+      status: 'done',
+      data: payload,
+      error: null,
+      completedAt: Date.now(),
+    });
+  } catch (error) {
+    await finishAudit(state.id, {
+      status: 'error',
+      error:
+        error.name === 'AbortError'
+          ? 'The audit timed out. Try again.'
+          : error.message || 'Audit failed.',
+      completedAt: Date.now(),
+    });
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+async function startAudit({ owner, repo, limit }) {
+  if (!owner || !repo) throw new Error('A repository is required.');
+  const state = {
+    id: crypto.randomUUID(),
+    status: 'loading',
+    owner,
+    repo,
+    slug: `${owner}/${repo}`,
+    limit: Math.min(200, Math.max(1, Number(limit) || 25)),
+    startedAt: Date.now(),
+    completedAt: null,
+    data: null,
+    error: null,
+  };
+  await chrome.storage.local.set({
+    [AUDIT_KEY]: state,
+    last_repo: { owner, repo },
+  });
+  runAudit(state).catch(() => null);
+  return state;
+}
+
 async function recordOAuthError(message) {
   await chrome.storage.session.set({
     [ERROR_KEY]: { message, at: Date.now() },
@@ -183,6 +280,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
       case 'CLEAR_OAUTH_ERROR':
         await clearOAuthError();
+        return {};
+      case 'RUN_AUDIT':
+        return { state: await startAudit(message) };
+      case 'GET_AUDIT':
+        return { state: await getAuditState() };
+      case 'CLEAR_AUDIT':
+        await chrome.storage.local.remove(AUDIT_KEY);
+        await chrome.action.setBadgeText({ text: '' });
         return {};
       case 'GET_AUTH_STATE':
         return await getState();

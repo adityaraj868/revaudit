@@ -12,7 +12,9 @@ Signed-in mode signs in with GitHub OAuth. A personal access token is available
 as an advanced fallback.
 
 Analysis is performed by the RevAudit FastAPI backend, which returns
-censoring-aware statistics and persists audits in PostgreSQL.
+censoring-aware statistics and persists audits in PostgreSQL. Audits run in the
+background service worker, so closing the popup does not cancel an in-progress
+audit; reopen it to see progress or the completed result.
 
 ## Features
 
@@ -100,7 +102,7 @@ Private repositories require the token to have access to them.
 ## Analysis API
 
 ```text
-GET {API_BASE}/api/audit?owner=<owner>&repo=<repo>&limit=50
+GET {API_BASE}/api/audit?owner=<owner>&repo=<repo>&limit=25
 ```
 
 - Default: `https://revaudit-backend.onrender.com`
@@ -157,7 +159,7 @@ The extension does not inject content scripts or modify GitHub pages.
 
 ## Limitations
 
-- The popup requests up to 50 PRs; the backend caps unauthenticated samples at 25.
+- The popup requests up to 25 PRs for a fast response.
 - The Render free tier can cold-start for up to 60 seconds; the popup shows a
   wake-up message after four seconds.
 - Private repositories require a `repo`-scoped user token.

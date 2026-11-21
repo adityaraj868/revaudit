@@ -275,70 +275,75 @@ function formatHours(hours) {
 // ==========================================
 // Main Pull Request Audit Workflow
 // ==========================================
-async function getApiBase() {
-  const stored = await chrome.storage.local.get('api_base_url');
-  const value =
-    stored.api_base_url ||
-    (globalThis.REVAUDIT_CONFIG && globalThis.REVAUDIT_CONFIG.API_BASE_URL) ||
-    'https://revaudit-backend.onrender.com';
-  return String(value).replace(/\/$/, '');
+const AUDIT_LIMIT = 25;
+let auditPollTimer = null;
+
+function stopAuditPolling() {
+  if (auditPollTimer) clearInterval(auditPollTimer);
+  auditPollTimer = null;
 }
 
-async function performAudit(owner, repo) {
+function applyAuditState(state) {
+  if (!state) return;
+  if (state.status === 'done') {
+    stopAuditPolling();
+    renderResults(state.data);
+    chrome.storage.local.set({ last_repo: { owner: state.owner, repo: state.repo } });
+    return;
+  }
+  if (state.status === 'error') {
+    stopAuditPolling();
+    setViewState('error');
+    errorMessage.textContent = state.error || 'The audit failed. Try again.';
+    return;
+  }
+  if (state.status === 'loading') {
+    setViewState('loading');
+    loadingTitle.textContent = `Auditing ${state.slug}...`;
+    const elapsed = Date.now() - (state.startedAt || Date.now());
+    loadingSubtitle.textContent =
+      elapsed > 4000
+        ? 'Waking up the analysis API… free-tier backends can take up to 60 seconds.'
+        : 'Requesting censoring-aware analysis from the RevAudit API...';
+    startAuditPolling();
+  }
+}
+
+async function pollAudit() {
+  try {
+    const response = await sendMessage({ type: 'GET_AUDIT' });
+    applyAuditState(response.state);
+  } catch (error) {
+    stopAuditPolling();
+    setViewState('error');
+    errorMessage.textContent = error.message || 'Could not read the audit state.';
+  }
+}
+
+function startAuditPolling() {
+  if (auditPollTimer) return;
+  auditPollTimer = setInterval(pollAudit, 1500);
+  pollAudit();
+}
+
+async function startAudit(owner, repo) {
+  stopAuditPolling();
   setViewState('loading');
   loadingTitle.textContent = `Auditing ${owner}/${repo}...`;
-  loadingSubtitle.textContent = 'Requesting censoring-aware analysis from the RevAudit API...';
-
-  const apiBase = await getApiBase();
-  const token = currentAuth && currentAuth.token ? currentAuth.token : null;
-  const headers = { Accept: 'application/json' };
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const url = `${apiBase}/api/audit?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}&limit=50`;
-  const slowTimer = setTimeout(() => {
-    loadingSubtitle.textContent =
-      'Waking up the analysis API… free-tier backends can take up to 60 seconds.';
-  }, 4000);
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 120000);
-  let data;
+  loadingSubtitle.textContent = 'Starting the analysis...';
   try {
-    const response = await fetch(url, { headers, signal: controller.signal, cache: 'no-store' });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      if (response.status === 404) {
-        throw new Error(`Repository "${owner}/${repo}" was not found. If it is private, sign in with GitHub first.`);
-      }
-      if (response.status === 429) {
-        throw new Error(payload.detail || 'GitHub rate limit reached. Sign in for 5,000 req/hr or retry later.');
-      }
-      if (response.status === 403) {
-        throw new Error(payload.detail || 'Access denied. Sign in with a token that can read this repository.');
-      }
-      if (response.status === 401) {
-        throw new Error(
-          payload.detail ||
-            'The analysis API could not authenticate with GitHub. The backend token may be invalid; sign in or contact the operator.',
-        );
-      }
-      throw new Error(payload.detail || `RevAudit API failed (HTTP ${response.status}).`);
-    }
-    data = payload;
-  } catch (err) {
+    const response = await sendMessage({
+      type: 'RUN_AUDIT',
+      owner,
+      repo,
+      limit: AUDIT_LIMIT,
+    });
+    applyAuditState(response.state);
+  } catch (error) {
+    stopAuditPolling();
     setViewState('error');
-    errorMessage.textContent =
-      err.name === 'AbortError'
-        ? 'The analysis API timed out. It may be cold-starting; try again.'
-        : err.message || 'Network error connecting to the RevAudit API. Check the API base in the auth drawer.';
-    return;
-  } finally {
-    clearTimeout(slowTimer);
-    clearTimeout(timeout);
+    errorMessage.textContent = error.message || 'Could not start the audit.';
   }
-
-  renderResults(data);
-  chrome.storage.local.set({ last_repo: { owner, repo } });
 }
 
 // Render Results View
@@ -551,7 +556,7 @@ async function handleAuditSubmit() {
   }
 
   clearRepoError();
-  await performAudit(parsed.owner, parsed.repo);
+  await startAudit(parsed.owner, parsed.repo);
 }
 
 // ==========================================
@@ -589,6 +594,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   const detected = await detectCurrentGitHubTab();
   if (!detected && stored.last_repo && stored.last_repo.owner && stored.last_repo.repo) {
     repoLinkInput.value = `https://github.com/${stored.last_repo.owner}/${stored.last_repo.repo}`;
+  }
+
+  // Restore the last audit state after the popup was closed, but only when it
+  // belongs to the repository currently shown.
+  try {
+    const savedAudit = await sendMessage({ type: 'GET_AUDIT' });
+    const current = parseRepoValue(repoLinkInput.value);
+    if (savedAudit.state && (!current || current.slug === savedAudit.state.slug)) {
+      applyAuditState(savedAudit.state);
+    }
+  } catch {
+    // No saved audit or the background is still starting.
   }
 
   // 3. Auth UI Events
