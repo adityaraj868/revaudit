@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "RevAudit \u2014 GitHub Review Auditor",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "Audits GitHub review latency with public or signed-in GitHub OAuth access.",
   "permissions": [
     "activeTab",

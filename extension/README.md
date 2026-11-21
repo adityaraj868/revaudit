@@ -18,7 +18,7 @@ censoring-aware statistics and persists audits in PostgreSQL.
 
 - Public repositories work without an account.
 - One-click **Sign in with GitHub** for private repositories and 5,000 req/hr.
-- Detect `owner/repo` from the active GitHub tab.
+- Detect the repository link from the active GitHub tab.
 - Kaplan–Meier cohort medians with bootstrap 95% confidence intervals.
 - Robust Huber residual triage signals and workload-adjusted flags.
 - Censored first-review counts and data-quality warnings.
@@ -44,7 +44,7 @@ this version again — the ID and redirect URL change.
 ## Public mode
 
 1. Click the RevAudit toolbar icon.
-2. Open a public GitHub repository tab and click **Current Tab**, or type `owner/repo`.
+2. Open a public GitHub repository tab and click **Current Tab**, or paste its link.
 3. Click **Audit Reviews**.
 
 No login is required. The extension calls the RevAudit API without an

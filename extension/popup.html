@@ -115,14 +115,10 @@
 
     <!-- Repository Inputs -->
     <section class="repo-section">
-      <div class="repo-inputs">
+      <div class="repo-inputs repo-inputs--single">
         <div class="input-field">
-          <label for="owner-input">Owner / Org</label>
-          <input type="text" id="owner-input" placeholder="e.g. facebook" spellcheck="false" />
-        </div>
-        <div class="input-field">
-          <label for="repo-input">Repository</label>
-          <input type="text" id="repo-input" placeholder="e.g. react" spellcheck="false" />
+          <label for="repo-link-input">Repository link</label>
+          <input type="text" id="repo-link-input" placeholder="https://github.com/owner/repo" spellcheck="false" autocomplete="off" />
         </div>
       </div>
       <div class="action-buttons">
@@ -155,7 +151,7 @@
           </svg>
         </div>
         <h3>Ready to Audit Pull Requests</h3>
-        <p>Open any GitHub repository or pull request in Chrome, or enter an owner/repo above to measure review velocity and detect latency anomalies.</p>
+        <p>Open any GitHub repository or pull request in Chrome, or paste its link above to measure review velocity and detect latency anomalies.</p>
         <div class="sample-chips">
           <span class="chip-label">Try popular repos:</span>
           <button class="chip" data-owner="pallets" data-repo="flask">pallets/flask</button>
@@ -247,7 +243,7 @@
 
     <!-- Footer -->
     <footer class="app-footer">
-      <span>RevAudit v1.3.3 • Public + OAuth + Backend</span>
+      <span>RevAudit v1.3.4 • Public + OAuth + Backend</span>
       <a href="https://github.com/adityaraj868/revaudit" target="_blank" rel="noopener">GitHub</a>
     </footer>
   </div>

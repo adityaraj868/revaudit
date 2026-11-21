@@ -398,6 +398,10 @@ body::-webkit-scrollbar-thumb:hover {
   gap: 8px;
 }
 
+.repo-inputs--single {
+  grid-template-columns: 1fr;
+}
+
 .input-field {
   display: flex;
   flex-direction: column;

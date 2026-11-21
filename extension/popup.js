@@ -24,8 +24,7 @@ const authFeedback = document.getElementById('auth-feedback');
 
 
 // DOM Elements - Repo & Actions
-const ownerInput = document.getElementById('owner-input');
-const repoInput = document.getElementById('repo-input');
+const repoLinkInput = document.getElementById('repo-link-input');
 const repoError = document.getElementById('repo-error');
 const auditBtn = document.getElementById('audit-btn');
 const detectTabBtn = document.getElementById('detect-tab-btn');
@@ -213,6 +212,21 @@ function clearRepoError() {
   repoError.classList.add('hidden');
 }
 
+function parseRepoValue(value) {
+  const cleaned = String(value || '')
+    .trim()
+    .replace(/^git@github\.com:/i, '')
+    .replace(/^https?:\/\/(www\.)?github\.com\//i, '')
+    .replace(/^github\.com\//i, '')
+    .replace(/\.git$/i, '')
+    .replace(/\/+$/, '');
+  const parts = cleaned.split('/').filter(Boolean);
+  if (parts.length < 2) return null;
+  const [owner, repo] = parts;
+  if (!/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repo)) return null;
+  return { owner, repo, slug: `${owner}/${repo}`, url: `https://github.com/${owner}/${repo}` };
+}
+
 // ==========================================
 // Browser Tab Detection
 // ==========================================
@@ -221,13 +235,9 @@ async function detectCurrentGitHubTab() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab || !tab.url) return false;
 
-    // Matches github.com/:owner/:repo
-    const match = tab.url.match(/^https?:\/\/github\.com\/([a-zA-Z0-9_\-\.]+)\/([a-zA-Z0-9_\-\.]+)/);
-    if (match) {
-      const owner = match[1];
-      const repo = match[2].replace(/\.git$/, '');
-      ownerInput.value = owner;
-      repoInput.value = repo;
+    const parsed = parseRepoValue(tab.url);
+    if (parsed) {
+      repoLinkInput.value = parsed.url;
       clearRepoError();
       return true;
     }
@@ -534,16 +544,14 @@ function escapeHtml(str) {
 }
 
 async function handleAuditSubmit() {
-  const owner = ownerInput.value.trim();
-  const repo = repoInput.value.trim();
-
-  if (!owner || !repo) {
-    setRepoError('Enter both the owner and repository name.');
+  const parsed = parseRepoValue(repoLinkInput.value);
+  if (!parsed) {
+    setRepoError('Enter a GitHub repository link, e.g. https://github.com/owner/repo.');
     return;
   }
 
   clearRepoError();
-  await performAudit(owner, repo);
+  await performAudit(parsed.owner, parsed.repo);
 }
 
 // ==========================================
@@ -551,7 +559,7 @@ async function handleAuditSubmit() {
 // ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
   // 1. Load saved Auth state
-  const stored = await chrome.storage.local.get(['gh_auth', 'last_repo', 'gh_client_id']);
+  const stored = await chrome.storage.local.get(['gh_auth', 'last_repo']);
   if (stored.gh_auth) {
     updateAuthUI(stored.gh_auth);
     // Refresh rate limits in background
@@ -579,9 +587,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 2. Tab Detection
   const detected = await detectCurrentGitHubTab();
-  if (!detected && stored.last_repo) {
-    ownerInput.value = stored.last_repo.owner || '';
-    repoInput.value = stored.last_repo.repo || '';
+  if (!detected && stored.last_repo && stored.last_repo.owner && stored.last_repo.repo) {
+    repoLinkInput.value = `https://github.com/${stored.last_repo.owner}/${stored.last_repo.repo}`;
   }
 
   // 3. Auth UI Events
@@ -589,7 +596,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (currentAuth && currentAuth.token) {
       // Disconnect
       await chrome.storage.local.remove(['gh_auth']);
-      sendMessage({ type: 'CANCEL_DEVICE_FLOW' }).catch(() => null);
       tokenInput.value = '';
       updateAuthUI(null);
     } else {
@@ -636,7 +642,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const authData = await verifyGitHubToken(rawToken);
       await chrome.storage.local.set({ gh_auth: authData });
-      sendMessage({ type: 'CANCEL_DEVICE_FLOW' }).catch(() => null);
       updateAuthUI(authData);
 
       authFeedback.className = 'auth-feedback success';
@@ -707,23 +712,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   detectTabBtn.addEventListener('click', async () => {
     const found = await detectCurrentGitHubTab();
     if (!found) {
-      setRepoError('This tab is not a GitHub repository. Open github.com/owner/repo or enter it above.');
+      setRepoError('This tab is not a GitHub repository. Open a repo page or paste its link above.');
     }
   });
 
-  [ownerInput, repoInput].forEach(inp => {
-    inp.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') handleAuditSubmit();
-    });
-    inp.addEventListener('input', clearRepoError);
+  repoLinkInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') handleAuditSubmit();
   });
+  repoLinkInput.addEventListener('input', clearRepoError);
 
   retryBtn.addEventListener('click', handleAuditSubmit);
 
   document.querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', () => {
-      ownerInput.value = chip.dataset.owner;
-      repoInput.value = chip.dataset.repo;
+      repoLinkInput.value = `https://github.com/${chip.dataset.owner}/${chip.dataset.repo}`;
       handleAuditSubmit();
     });
   });
