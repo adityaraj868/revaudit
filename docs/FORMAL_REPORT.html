@@ -1,0 +1,1682 @@
+<!doctype html><html><head><meta charset="utf-8"><title>RevAudit — Formal Report</title><style>
+:root{--ink:#111827;--muted:#4b5563;--accent:#c2410c;--rule:#d1d5db;--panel:#f8fafc}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#fff}
+body{font-family:Georgia,"Times New Roman",serif;font-size:10.7pt;line-height:1.56;color:var(--ink)}
+h1,h2,h3,h4{font-family:"Helvetica Neue",Arial,sans-serif;color:#0f172a;line-height:1.24}
+h2{font-size:15.5pt;margin:0 0 7pt;padding-bottom:4pt;border-bottom:2px solid var(--accent);page-break-before:always;break-before:page}
+h2:first-of-type{page-break-before:auto;break-before:auto}
+h3{font-size:11.4pt;margin:14pt 0 4pt;color:#1f2937;page-break-after:avoid}
+h4{font-size:10.4pt;margin:11pt 0 3pt}
+p{margin:0 0 7pt;text-align:justify;hyphens:auto}
+ul,ol{margin:0 0 8pt 18pt;padding:0}
+li{margin-bottom:3pt}
+a{color:#1d4ed8;text-decoration:none}
+code{font-family:"JetBrains Mono",Consolas,monospace;font-size:8.5pt;background:#eef2f7;padding:0 2px;border-radius:3px}
+pre{background:var(--panel);border-left:4px solid var(--accent);padding:8pt 10pt;margin:8pt 0;white-space:pre-wrap;word-break:break-word;page-break-inside:avoid}
+pre code{background:none;padding:0;font-size:8.1pt}
+table{width:100%;border-collapse:collapse;margin:8pt 0 10pt;font-size:8.7pt;page-break-inside:auto}
+thead{display:table-header-group}
+th,td{border:1px solid #cbd5e1;padding:4pt 5pt;vertical-align:top;text-align:left}
+th{background:#172033;color:#fff;font-family:Arial,sans-serif;font-size:8.4pt}
+tr{page-break-inside:avoid}
+tbody tr:nth-child(even) td{background:var(--panel)}
+hr{border:none;border-top:1px solid var(--rule);margin:14pt 0}
+blockquote{margin:10pt 0;padding:8pt 12pt;border-left:4px solid #94a3b8;background:var(--panel);color:#334155}
+img{max-width:100%}
+strong{color:#0f172a}
+.toc{list-style:none;margin:2pt 0 0;padding:0;font-family:Arial,sans-serif;font-size:9.6pt;columns:1}
+.toc li{display:flex;align-items:baseline;margin:3.2pt 0;break-inside:avoid}
+.toc a{color:#111827;text-decoration:none;flex:0 1 auto}
+.toc .dots{flex:1 1 auto;border-bottom:1px dotted #94a3b8;margin:0 6px 2px;min-width:14px}
+.toc .pg{color:#334155;font-variant-numeric:tabular-nums;font-weight:600;min-width:18px;text-align:right}
+.toc .front a{color:#475569}
+.cover{page-break-after:always;break-after:page;height:297mm;padding:40mm 22mm 22mm;display:flex;flex-direction:column}
+.cover .brand{font-family:"Helvetica Neue",Arial,sans-serif;font-size:30pt;font-weight:800;letter-spacing:-1px;color:#0f172a}
+.cover .brand span{color:var(--accent)}
+.cover .kicker{margin-top:6mm;font-family:Arial,sans-serif;font-size:9pt;letter-spacing:2px;text-transform:uppercase;color:#64748b}
+.cover h1{font-size:26pt;line-height:1.18;margin:10mm 0 4mm;border:none;page-break-before:avoid}
+.cover .subtitle{font-size:13pt;color:#334155;margin-bottom:16mm}
+.cover table{font-size:9.5pt;width:100%;border:none;margin-top:auto}
+.cover td{border:none;border-bottom:1px solid #e2e8f0;padding:5pt 0}
+.cover td:first-child{color:#64748b;width:32%;font-family:Arial,sans-serif;font-size:8.5pt;text-transform:uppercase;letter-spacing:.5px}
+.cover .footer{margin-top:12mm;padding-top:5mm;border-top:2px solid var(--accent);font-family:Arial,sans-serif;font-size:9pt;color:#475569;display:flex;justify-content:space-between}
+@media screen{
+  body{max-width:860px;margin:0 auto;padding:34px 30px 70px}
+  .cover{height:auto;min-height:940px;border-bottom:1px solid var(--rule);margin-bottom:40px}
+}
+</style></head><body><section class="cover">
+  <div class="brand">Rev<span>Audit</span></div>
+  <div class="kicker">UCS503 Software Engineering Laboratory · Project Report</div>
+  <h1>Censoring-Aware Analysis of Pull Request Review Effort</h1>
+  <div class="subtitle">A complete formal report on the RevAudit system: statistical methodology,<br>full-stack implementation, deployment, and verification.</div>
+  <table>
+    <tr><td>Team</td><td>ArchCoders — Dheeraj Kumar, Vaibhav Goyal, Adityaraj Singh, Sparsh Khandelwal</td></tr>
+    <tr><td>Faculty Advisor</td><td>Dr. Sukhpal Singh</td></tr>
+    <tr><td>Institution</td><td>Thapar Institute of Engineering and Technology</td></tr>
+    <tr><td>Version</td><td>2.0 · 21 November 2026</td></tr>
+    <tr><td>Repository</td><td>github.com/adityaraj868/revaudit · branch <code>deploy</code></td></tr>
+    <tr><td>Deployment</td><td>GitHub Pages · Render · Supabase</td></tr>
+  </table>
+  <div class="footer"><span>RevAudit</span><span>Statistical review-effort audit</span></div>
+</section><main class="content"><h2 id="declaration">Declaration</h2>
+<p>We declare that this report and the associated implementation were prepared by Team
+ArchCoders for UCS503 Software Engineering Laboratory. The statistical methods,
+system architecture, implementation, testing, and deployment described here were
+developed as part of the project. External libraries and services are acknowledged
+in the References section.</p>
+<h2 id="acknowledgement">Acknowledgement</h2>
+<p>We thank Dr. Sukhpal Singh for guidance on the project scope, statistical framing,
+and academic presentation. We also acknowledge the open-source maintainers of
+GitHub&#39;s REST API, FastAPI, SQLAlchemy, NumPy, React, Vite, Tailwind CSS, Supabase,
+and ReportLab, whose documentation and tooling supported this work.</p>
+<hr>
+<h2 id="table-of-contents">Table of Contents</h2>
+<ol class="toc"><li class="front"><a href="#declaration">Declaration</a><span class="dots"></span><span class="pg">1</span></li>
+<li class="front"><a href="#acknowledgement">Acknowledgement</a><span class="dots"></span><span class="pg">2</span></li>
+<li class="front"><a href="#table-of-contents">Table of Contents</a><span class="dots"></span><span class="pg">3</span></li>
+<li><a href="#1-abstract">1. Abstract</a><span class="dots"></span><span class="pg">4</span></li>
+<li><a href="#2-introduction">2. Introduction</a><span class="dots"></span><span class="pg">5</span></li>
+<li><a href="#3-background-and-related-concepts">3. Background and Related Concepts</a><span class="dots"></span><span class="pg">7</span></li>
+<li><a href="#4-requirements-and-stakeholders">4. Requirements and Stakeholders</a><span class="dots"></span><span class="pg">8</span></li>
+<li><a href="#5-system-architecture">5. System Architecture</a><span class="dots"></span><span class="pg">10</span></li>
+<li><a href="#6-data-ingestion-and-persistence">6. Data Ingestion and Persistence</a><span class="dots"></span><span class="pg">13</span></li>
+<li><a href="#7-statistical-methodology">7. Statistical Methodology</a><span class="dots"></span><span class="pg">15</span></li>
+<li><a href="#8-backend-implementation">8. Backend Implementation</a><span class="dots"></span><span class="pg">17</span></li>
+<li><a href="#9-frontend-implementation">9. Frontend Implementation</a><span class="dots"></span><span class="pg">19</span></li>
+<li><a href="#10-deployment-and-operations">10. Deployment and Operations</a><span class="dots"></span><span class="pg">22</span></li>
+<li><a href="#11-testing-and-verification">11. Testing and Verification</a><span class="dots"></span><span class="pg">24</span></li>
+<li><a href="#12-results-and-discussion">12. Results and Discussion</a><span class="dots"></span><span class="pg">26</span></li>
+<li><a href="#13-ethics-privacy-and-governance">13. Ethics, Privacy, and Governance</a><span class="dots"></span><span class="pg">28</span></li>
+<li><a href="#14-limitations-and-future-work">14. Limitations and Future Work</a><span class="dots"></span><span class="pg">29</span></li>
+<li><a href="#15-conclusion">15. Conclusion</a><span class="dots"></span><span class="pg">30</span></li>
+<li><a href="#16-references">16. References</a><span class="dots"></span><span class="pg">31</span></li>
+<li><a href="#appendix-a--api-reference">Appendix A — API Reference</a><span class="dots"></span><span class="pg">32</span></li>
+<li><a href="#appendix-b--database-schema">Appendix B — Database Schema</a><span class="dots"></span><span class="pg">33</span></li>
+<li><a href="#appendix-c--environment-variables">Appendix C — Environment Variables</a><span class="dots"></span><span class="pg">34</span></li>
+<li><a href="#appendix-d--test-inventory">Appendix D — Test Inventory</a><span class="dots"></span><span class="pg">35</span></li>
+<li><a href="#appendix-e--reproduction-guide">Appendix E — Reproduction Guide</a><span class="dots"></span><span class="pg">36</span></li>
+<li><a href="#appendix-f--glossary">Appendix F — Glossary</a><span class="dots"></span><span class="pg">37</span></li></ol><hr>
+<h2 id="1-abstract">1. Abstract</h2>
+<p>Pull request (PR) review is a queueing process, but most engineering dashboards
+measure only time-to-merge or average review duration. Those metrics conflate code
+complexity, reviewer workload, abandoned work, and open PRs that have never been
+reviewed. They also create perverse incentives: trivial changes are approved
+quickly while large, high-risk changes are delayed.</p>
+<p>RevAudit is a full-stack analytical system that measures <strong>time to first human
+review</strong> rather than time-to-merge. It samples GitHub pull requests, enriches them
+with timeline and review events, treats unreviewed and open PRs as right-censored
+observations, and estimates cohort baselines with Kaplan–Meier medians and
+bootstrap 95% confidence intervals. It classifies PRs by changed lines and files,
+fits a Huber robust regression on log-transformed first-review latency, and reports
+process triage signals alongside a workload-adjusted threshold:</p>
+<pre><code class="language-text">Dynamic_Threshold = 1.5 + (0.15 × active_prs_in_queue)
+</code></pre>
+<p>The implementation consists of a FastAPI backend with GitHub OAuth, Supabase/Postgres
+persistence, signed webhook ingestion, and PDF export; and a React single-page
+application with protected reviewer, contributor, and manager dashboards, a smart
+triage queue, a complexity coach, and a print-ready manager report. The system is
+deployed with the frontend on GitHub Pages, the API on Render, authentication and
+PostgreSQL on Supabase, and GitHub webhooks for closed-PR ingestion.</p>
+<p>Verification includes 22 backend tests, browser-level end-to-end checks of routing,
+role gates, queue ordering, complexity warnings, and print behaviour, plus live
+audits against public repositories and persistence/history checks against PostgreSQL.
+The report also documents the statistical assumptions, deployment configuration,
+ethical boundaries, and remaining gaps, including the distinction between
+route-based role views and true role-based access control.</p>
+<p><strong>Keywords:</strong> code review, review latency, survival analysis, Kaplan–Meier,
+right-censoring, robust regression, reviewer workload, GitHub API, FastAPI, React,
+Supabase, deployment.</p>
+<hr>
+<h2 id="2-introduction">2. Introduction</h2>
+<h3 id="21-problem-statement">2.1 Problem Statement</h3>
+<p>Software teams routinely track “time-to-merge” as a proxy for review health. The
+metric is easy to compute from GitHub and easy to display, but it is not a review
+metric. It measures the entire lifecycle: implementation, CI, author revisions,
+review waits, approval delays, and merge policy. A ten-line bug fix that waits two
+days and a two-thousand-line refactor that merges in two days receive the same
+score, even though the first indicates queue stagnation and the second may indicate
+excellent review throughput.</p>
+<p>Three confounders dominate:</p>
+<ol>
+<li><strong>PR size.</strong> Larger changes require more reading, more context, and more
+iterations. Comparing raw review times across sizes is misleading.</li>
+<li><strong>Reviewer workload.</strong> A reviewer carrying several active PRs cannot provide the
+same latency as an idle reviewer. Queue pressure is not a property of the PR.</li>
+<li><strong>Survivorship and censoring.</strong> Open or closed-without-review PRs are often
+dropped from “completed review” averages. Dropping them systematically
+underestimates queue latency because the slowest cases disappear.</li>
+</ol>
+<p>The result is a metric that rewards superficial approvals on trivial PRs and
+penalizes thorough review of complex work.</p>
+<h3 id="22-project-objectives">2.2 Project Objectives</h3>
+<p>RevAudit was built with the following objectives:</p>
+<ol>
+<li>Define and compute a defensible primary outcome: <strong>time from review eligibility
+to the first human review</strong>.</li>
+<li>Preserve open and unreviewed PRs as <strong>right-censored</strong> observations instead of
+discarding them.</li>
+<li>Control for PR scope using changed lines and changed files, with explicit
+Unknown cohorts when metadata is missing.</li>
+<li>Estimate cohort baselines non-parametrically and report uncertainty only when
+the sample supports it.</li>
+<li>Model latency conditionally on scope, contributor experience, and recent
+reviewer activity using a robust regression.</li>
+<li>Add a transparent workload-adjusted threshold derived from observable review
+request evidence.</li>
+<li>Persist audits and webhook deliveries in a relational database for historical
+queries.</li>
+<li>Provide separate contributor, reviewer, and manager experiences without turning
+the dashboard into an individual performance scorecard.</li>
+<li>Be deployable with managed services: GitHub Pages, Render, Supabase, and GitHub
+webhooks.</li>
+</ol>
+<h3 id="23-scope">2.3 Scope</h3>
+<p>The system analyzes public repositories through unauthenticated GitHub API access
+and private or higher-rate repositories through a user token or OAuth session. The
+unit of analysis is a pull request. The primary statistical output is a set of
+cohort baselines, adjusted triage signals, and workload metrics. The system does
+not attempt to measure code quality, reviewer competence, or individual
+productivity.</p>
+<h3 id="24-contributions">2.4 Contributions</h3>
+<ul>
+<li>A censoring-aware review-latency pipeline built on GitHub&#39;s public REST API.</li>
+<li>A hybrid statistical engine combining Kaplan–Meier estimation, bootstrap
+intervals, Huber robust regression, and a workload-adjusted ratio rule.</li>
+<li>A persistence and webhook layer that converts a stateless analysis endpoint into
+a historical audit system.</li>
+<li>A role-oriented frontend with distinct workflows for contributors, reviewers,
+and managers.</li>
+<li>A deployment blueprint spanning Supabase Auth/PostgreSQL, Render, and GitHub
+Pages.</li>
+<li>A reproducible verification suite covering statistics, persistence, webhook
+signatures, PDF generation, and browser-level UI behaviour.</li>
+</ul>
+<hr>
+<h2 id="3-background-and-related-concepts">3. Background and Related Concepts</h2>
+<h3 id="31-review-latency">3.1 Review Latency</h3>
+<p>Review latency is a queueing metric. In a single-reviewer queue, the waiting time
+depends on arrival rate, service time, and the reviewer&#39;s current backlog. In a
+multi-reviewer repository, assignment policy and reviewer availability dominate.
+Time-to-merge includes several stages after the first review, so it is not a clean
+measure of queue delay.</p>
+<p>RevAudit therefore defines the primary outcome from the moment a PR becomes
+eligible for review to the moment a non-bot human submits the first review. For
+draft PRs, eligibility begins at the first <code>ready_for_review</code> event.</p>
+<h3 id="32-right-censoring-and-survival-analysis">3.2 Right-Censoring and Survival Analysis</h3>
+<p>If a PR has not received a first review by the audit timestamp, its true latency is
+unknown but at least the observed age. Discarding it biases the sample toward fast
+reviews. Right-censoring retains that lower bound.</p>
+<p>The Kaplan–Meier estimator handles censored observations by updating survival at
+each event time using the number still at risk. The median is the first time the
+estimated survival drops to or below 0.5.</p>
+<h3 id="33-robust-regression">3.3 Robust Regression</h3>
+<p>Review latency is heavy-tailed. Ordinary least squares is sensitive to extreme
+outliers and to leverage points. RevAudit models <code>log(1 + hours)</code> with a Huber
+M-estimator using iteratively reweighted least squares. Residuals are standardized
+with the median absolute deviation, and large absolute residuals are reported as
+triage signals rather than causal findings.</p>
+<h3 id="34-reviewer-workload">3.4 Reviewer Workload</h3>
+<p>GitHub exposes review requests and review events, but not a complete historical
+view of every reviewer&#39;s assignment queue. RevAudit uses two observable proxies:</p>
+<ul>
+<li><strong>Recent activity:</strong> the number of human reviews submitted by the eventual first
+reviewer in the seven days before the first review.</li>
+<li><strong>Active queue at creation:</strong> other sampled PRs that were still open at this PR&#39;s
+ready-for-review time and already had an explicit review request for the eventual
+first reviewer.</li>
+</ul>
+<p>Both are transparent and bounded by the sampled window. Neither claims to be a
+complete assignment history.</p>
+<h3 id="35-role-based-analytics">3.5 Role-Based Analytics</h3>
+<p>Different stakeholders ask different questions:</p>
+<ul>
+<li><strong>Contributors</strong> want to know whether their PRs are waiting, which are active,
+and how to prepare a reviewable change.</li>
+<li><strong>Reviewers</strong> want an actionable queue ordered by review cost and age.</li>
+<li><strong>Managers</strong> want cohort baselines, adjusted signals, and a printable summary.</li>
+</ul>
+<p>A single dashboard forces all three into one view. RevAudit separates the
+workflows by route while keeping a shared data payload.</p>
+<hr>
+<h2 id="4-requirements-and-stakeholders">4. Requirements and Stakeholders</h2>
+<h3 id="41-stakeholders">4.1 Stakeholders</h3>
+<table>
+<thead>
+<tr>
+<th>Stakeholder</th>
+<th>Primary need</th>
+<th>RevAudit view</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Contributor</td>
+<td>Understand active PRs and draft reviewable changes</td>
+<td>Contributor Dashboard</td>
+</tr>
+<tr>
+<td>Reviewer</td>
+<td>Triage incoming work efficiently</td>
+<td>Reviewer Triage Queue</td>
+</tr>
+<tr>
+<td>Engineering manager</td>
+<td>Inspect baselines, anomalies, and workload</td>
+<td>Manager Report</td>
+</tr>
+<tr>
+<td>Researcher / instructor</td>
+<td>Audit methodology and reproducibility</td>
+<td>Methodology, Presentation, Report</td>
+</tr>
+<tr>
+<td>Auditor</td>
+<td>Inspect evidence behind a flagged PR</td>
+<td>Evidence modal and PR links</td>
+</tr>
+</tbody></table>
+<h3 id="42-functional-requirements">4.2 Functional Requirements</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+<th>Implementation</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>FR-1</td>
+<td>Ingest paginated GitHub PRs and timeline events</td>
+<td><code>/api/audit</code>, GitHub REST client</td>
+</tr>
+<tr>
+<td>FR-2</td>
+<td>Preserve open/unreviewed PRs as censored</td>
+<td><code>statistical_engine.py</code></td>
+</tr>
+<tr>
+<td>FR-3</td>
+<td>Estimate cohort medians and 95% intervals</td>
+<td>Kaplan–Meier + bootstrap</td>
+</tr>
+<tr>
+<td>FR-4</td>
+<td>Detect adjusted process signals</td>
+<td>Huber residual model</td>
+</tr>
+<tr>
+<td>FR-5</td>
+<td>Apply workload-adjusted thresholds</td>
+<td><code>annotate_workload_thresholds</code></td>
+</tr>
+<tr>
+<td>FR-6</td>
+<td>Persist audits and webhook events</td>
+<td><code>persistence.py</code></td>
+</tr>
+<tr>
+<td>FR-7</td>
+<td>Verify webhook authenticity</td>
+<td>HMAC-SHA256</td>
+</tr>
+<tr>
+<td>FR-8</td>
+<td>Provide historical queries</td>
+<td><code>/api/history</code></td>
+</tr>
+<tr>
+<td>FR-9</td>
+<td>Export a portable report</td>
+<td>ReportLab PDF + print CSS</td>
+</tr>
+<tr>
+<td>FR-10</td>
+<td>Separate contributor/reviewer/manager views</td>
+<td>React routes</td>
+</tr>
+<tr>
+<td>FR-11</td>
+<td>Protect role views</td>
+<td><code>RequireAuth</code></td>
+</tr>
+<tr>
+<td>FR-12</td>
+<td>Show loading and cold-start feedback</td>
+<td>Skeletons + toast</td>
+</tr>
+<tr>
+<td>FR-13</td>
+<td>Coach contributors on large drafts</td>
+<td>Complexity Coach</td>
+</tr>
+</tbody></table>
+<h3 id="43-non-functional-requirements">4.3 Non-Functional Requirements</h3>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Security</td>
+<td>Secrets in environment variables; encrypted OAuth tokens; HMAC webhook verification</td>
+</tr>
+<tr>
+<td>Privacy</td>
+<td>No posting or mutation of GitHub data; read-only scopes; no individual performance score</td>
+</tr>
+<tr>
+<td>Performance</td>
+<td>Bounded pagination; parallel enrichment; in-memory audit cache</td>
+</tr>
+<tr>
+<td>Reliability</td>
+<td>Idempotent upserts; retry on unique conflicts; clear error states</td>
+</tr>
+<tr>
+<td>Usability</td>
+<td>Responsive dark UI; role-specific navigation; print-ready manager report</td>
+</tr>
+<tr>
+<td>Deployability</td>
+<td>Managed Postgres/Auth; Render API; GitHub Pages frontend</td>
+</tr>
+<tr>
+<td>Maintainability</td>
+<td>Modular backend files; typed-ish schemas; documented environment</td>
+</tr>
+</tbody></table>
+<h3 id="44-assumptions-and-constraints">4.4 Assumptions and Constraints</h3>
+<ul>
+<li>GitHub&#39;s public API may rate-limit unauthenticated traffic; the audit cap is 25
+PRs without a token.</li>
+<li>Review request history is incomplete outside the sampled window.</li>
+<li>GitHub team-based review requests are not resolved to individual reviewers.</li>
+<li>Repository data can change between pages; the audit is a point-in-time sample.</li>
+<li>The free Render tier cold-starts; the UI communicates this rather than hiding it.</li>
+</ul>
+<hr>
+<h2 id="5-system-architecture">5. System Architecture</h2>
+<h3 id="51-high-level-architecture">5.1 High-Level Architecture</h3>
+<pre><code class="language-text">┌──────────────────────┐        HTTPS / JSON        ┌──────────────────────────┐
+│ React SPA            │ ─────────────────────────► │ FastAPI on Render        │
+│ GitHub Pages         │ ◄───────────────────────── │ audit · auth · stats     │
+│ base: /revaudit/     │                            │ webhooks · history · PDF │
+└─────────┬────────────┘                            └───────┬─────────┬────────┘
+          │ Supabase OAuth redirect                          │         │
+          ▼                                                  │         │ REST
+┌──────────────────────┐                                     │         ▼
+│ Supabase Auth        │  provider_token → Authorization     │  ┌──────────────┐
+│ GitHub provider      │ ───────────────────────────────────►│  │ GitHub API   │
+└──────────────────────┘                                     │  └──────────────┘
+                                                             │ SQLAlchemy
+                                                             ▼
+                                                  ┌──────────────────────────┐
+                                                  │ Supabase PostgreSQL      │
+                                                  │ users · repositories     │
+                                                  │ pull_requests · reviews  │
+                                                  │ auth_sessions            │
+                                                  └──────────────────────────┘
+
+GitHub webhook ──► POST /api/webhook/github ──► BackgroundTasks ──► DB
+</code></pre>
+<h3 id="52-request-flows">5.2 Request Flows</h3>
+<p><strong>Audit flow</strong></p>
+<ol>
+<li>The SPA requests <code>/api/audit?owner=&lt;owner&gt;&amp;repo=&lt;repo&gt;</code> with optional bearer
+token.</li>
+<li>FastAPI selects the token: bearer header, server-side OAuth session, or
+<code>GITHUB_TOKEN</code>.</li>
+<li>The GitHub client paginates <code>/repos/{owner}/{repo}/pulls</code> (100/page) up to the
+requested sample limit.</li>
+<li>Each PR is enriched with <code>/pulls/{number}</code> (change size) and
+<code>/issues/{number}/timeline</code> (review events, review requests, ready-for-review).</li>
+<li>Records are normalized, censored, and passed to the statistical engine.</li>
+<li>Baselines, robust model, workload thresholds, stage metrics, and anomalies are
+computed.</li>
+<li>The response is cached for five minutes when unauthenticated.</li>
+<li>A background task mirrors the payload into PostgreSQL.</li>
+</ol>
+<p><strong>Webhook flow</strong></p>
+<ol>
+<li>GitHub sends <code>pull_request.closed</code> with <code>X-Hub-Signature-256</code>.</li>
+<li>FastAPI verifies the HMAC in constant time.</li>
+<li>The endpoint returns <code>200</code> immediately.</li>
+<li>A background task fetches the PR detail, timeline, and reviews with
+<code>GITHUB_TOKEN</code>, builds a record, and upserts it.</li>
+</ol>
+<p><strong>Auth flow</strong></p>
+<ol>
+<li>The frontend starts Supabase GitHub OAuth with <code>repo read:user</code> scopes.</li>
+<li>Supabase redirects back to the Pages URL with a session.</li>
+<li>The SPA stores the GitHub <code>provider_token</code> and attaches it as a bearer token.</li>
+<li>The backend validates it against GitHub and uses it for audits.</li>
+</ol>
+<h3 id="53-technology-stack">5.3 Technology Stack</h3>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Technology</th>
+<th>Version</th>
+<th>Rationale</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Frontend</td>
+<td>React</td>
+<td>19.2.8</td>
+<td>Component model, mature ecosystem</td>
+</tr>
+<tr>
+<td>Build</td>
+<td>Vite</td>
+<td>5.4.21</td>
+<td>Fast dev server, static build</td>
+</tr>
+<tr>
+<td>Styling</td>
+<td>Tailwind CSS</td>
+<td>4.3.3</td>
+<td>Consistent dark design system</td>
+</tr>
+<tr>
+<td>Routing</td>
+<td>react-router-dom</td>
+<td>7.18.6</td>
+<td>Hash routes for Pages compatibility</td>
+</tr>
+<tr>
+<td>Auth client</td>
+<td>@supabase/supabase-js</td>
+<td>2.119.0</td>
+<td>Managed GitHub OAuth</td>
+</tr>
+<tr>
+<td>Icons</td>
+<td>lucide-react</td>
+<td>1.45.0</td>
+<td>Lightweight SVG icons</td>
+</tr>
+<tr>
+<td>Backend</td>
+<td>FastAPI</td>
+<td>0.165.0</td>
+<td>Typed API, OpenAPI, BackgroundTasks</td>
+</tr>
+<tr>
+<td>Server</td>
+<td>Uvicorn</td>
+<td>0.54.0</td>
+<td>ASGI server</td>
+</tr>
+<tr>
+<td>ORM</td>
+<td>SQLAlchemy</td>
+<td>2.1.9</td>
+<td>Portable Postgres/SQLite models</td>
+</tr>
+<tr>
+<td>Math</td>
+<td>NumPy</td>
+<td>2.5.5</td>
+<td>KM, bootstrap, regression</td>
+</tr>
+<tr>
+<td>PDF</td>
+<td>ReportLab</td>
+<td>5.1.0</td>
+<td>Server-side report generation</td>
+</tr>
+<tr>
+<td>Crypto</td>
+<td>cryptography</td>
+<td>50.0.2</td>
+<td>Fernet token encryption</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>PostgreSQL / SQLite</td>
+<td>17.12 / local</td>
+<td>Managed production / local dev</td>
+</tr>
+<tr>
+<td>Auth + DB</td>
+<td>Supabase</td>
+<td>managed</td>
+<td>OAuth provider + Postgres</td>
+</tr>
+<tr>
+<td>API host</td>
+<td>Render</td>
+<td>free web service</td>
+<td>Simple Python deployment</td>
+</tr>
+<tr>
+<td>Frontend host</td>
+<td>GitHub Pages</td>
+<td>static</td>
+<td>Zero-cost static hosting</td>
+</tr>
+</tbody></table>
+<h3 id="54-repository-structure">5.4 Repository Structure</h3>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>backend/main.py</code></td>
+<td>FastAPI app, audit, auth, history, webhook, PDF endpoints</td>
+</tr>
+<tr>
+<td><code>backend/statistical_engine.py</code></td>
+<td>Cohorts, KM, bootstrap, Huber model, workload thresholds</td>
+</tr>
+<tr>
+<td><code>backend/persistence.py</code></td>
+<td>Idempotent database mirror</td>
+</tr>
+<tr>
+<td><code>backend/webhooks.py</code></td>
+<td>HMAC verification and background ingestion</td>
+</tr>
+<tr>
+<td><code>backend/auth.py</code></td>
+<td>Encrypted OAuth session helpers</td>
+</tr>
+<tr>
+<td><code>backend/models.py</code></td>
+<td>SQLAlchemy entities</td>
+</tr>
+<tr>
+<td><code>backend/reporting.py</code></td>
+<td>ReportLab PDF generation</td>
+</tr>
+<tr>
+<td><code>backend/tests/</code></td>
+<td>Unit and integration tests</td>
+</tr>
+<tr>
+<td><code>frontend/src/App.jsx</code></td>
+<td>Route shell, audit state, auth wiring</td>
+</tr>
+<tr>
+<td><code>frontend/src/components/</code></td>
+<td>Dashboards and visual components</td>
+</tr>
+<tr>
+<td><code>frontend/src/lib/</code></td>
+<td>API and Supabase clients</td>
+</tr>
+<tr>
+<td><code>docs/</code></td>
+<td>Reports, implementation guide, PlantUML diagrams</td>
+</tr>
+<tr>
+<td><code>render.yaml</code></td>
+<td>Render service definition</td>
+</tr>
+<tr>
+<td><code>.github/workflows/deploy-frontend.yml</code></td>
+<td>GitHub Pages build/deploy</td>
+</tr>
+</tbody></table>
+<h3 id="55-deployment-topology">5.5 Deployment Topology</h3>
+<ul>
+<li><strong>Supabase</strong> hosts GitHub OAuth and PostgreSQL.</li>
+<li><strong>Render</strong> hosts the FastAPI service (<code>revaudit-backend</code>).</li>
+<li><strong>GitHub Pages</strong> hosts the built SPA at <code>/revaudit/</code>.</li>
+<li><strong>GitHub webhooks</strong> deliver closed-PR events to Render.</li>
+</ul>
+<p>Cross-site cookies use <code>SameSite=None</code> when <code>COOKIE_SECURE=true</code>; the GitHub Pages
+origin is allowed through <code>FRONTEND_URL</code>, while OAuth redirects preserve the
+<code>/revaudit/</code> path.</p>
+<hr>
+<h2 id="6-data-ingestion-and-persistence">6. Data Ingestion and Persistence</h2>
+<h3 id="61-github-rest-integration">6.1 GitHub REST Integration</h3>
+<p>The audit endpoint requests recent PRs with:</p>
+<pre><code class="language-text">GET /repos/{owner}/{repo}/pulls
+    ?state=all
+    &amp;sort=created
+    &amp;direction=desc
+    &amp;per_page=100
+</code></pre>
+<p>Pagination follows the <code>Link: rel=&quot;next&quot;</code> header. The sample limit is user
+configurable up to 200, but unauthenticated requests are capped at 25 PRs to avoid
+exhausting GitHub&#39;s 60 requests/hour IP limit. Authenticated requests use the
+5,000 requests/hour budget.</p>
+<h3 id="62-per-pr-enrichment">6.2 Per-PR Enrichment</h3>
+<p>For each PR, the backend requests:</p>
+<ul>
+<li><code>GET /repos/{owner}/{repo}/pulls/{number}</code> — additions, deletions, changed files.</li>
+<li><code>GET /repos/{owner}/{repo}/issues/{number}/timeline</code> — reviews, author comments,
+review requests, ready-for-review events.</li>
+</ul>
+<p>Enrichment runs in batches of six PRs with three worker threads. A rate-limit
+response stops further enrichment and marks the audit partial; the partial sample
+is still returned with explicit warnings.</p>
+<h3 id="63-normalization">6.3 Normalization</h3>
+<p>Each record stores:</p>
+<ul>
+<li>identity: PR number, title, author, association, URL, state;</li>
+<li>timing: created, ready-for-review, merged, closed, first review;</li>
+<li>scope: additions, deletions, changed lines, files, cohort;</li>
+<li>review history: human reviews, review requests, rounds;</li>
+<li>censoring: whether a first review was observed and why not;</li>
+<li>derived: latency, workload proxy, thresholds, model prediction.</li>
+</ul>
+<p>Bot authors (<code>[bot]</code>, Dependabot, Renovate, GitHub Actions, Codecov, etc.) are
+excluded from cohort and model estimates. Bot reviewers are ignored. The PR remains
+in the sample totals but does not influence baselines.</p>
+<h3 id="64-censoring-rules">6.4 Censoring Rules</h3>
+<ul>
+<li>If a first human review exists: event observed, latency computed.</li>
+<li>If no review and the PR is open: right-censored at audit time.</li>
+<li>If no review and the PR is closed unmerged: censored at closure.</li>
+<li>If the timeline could not be fetched: the PR is excluded from survival
+estimates and a warning is emitted.</li>
+</ul>
+<h3 id="65-relational-schema">6.5 Relational Schema</h3>
+<p>Five tables are used:</p>
+<table>
+<thead>
+<tr>
+<th>Table</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>repositories</code></td>
+<td>Owner/name, default branch, last sync</td>
+</tr>
+<tr>
+<td><code>users</code></td>
+<td>GitHub identity, avatar, login</td>
+</tr>
+<tr>
+<td><code>pull_requests</code></td>
+<td>One row per PR with scope, timing, review, and workload fields</td>
+</tr>
+<tr>
+<td><code>review_events</code></td>
+<td>Human review events with state and timestamp</td>
+</tr>
+<tr>
+<td><code>auth_sessions</code></td>
+<td>Hashed session ID and encrypted OAuth token</td>
+</tr>
+</tbody></table>
+<p>The <code>pull_requests</code> table includes Phase 3 fields:
+<code>reviewer_queue_at_creation</code>, <code>dynamic_threshold_ratio</code>,
+<code>dynamic_threshold_hours</code>, <code>workload_ratio_to_median</code>, and
+<code>is_workload_anomaly</code>.</p>
+<h3 id="66-idempotency-and-concurrency">6.6 Idempotency and Concurrency</h3>
+<p>Audit persistence and webhook ingestion may overlap. The persistence module:</p>
+<ul>
+<li>serialises writes with a process-wide lock;</li>
+<li>uses savepoints and retries when a unique constraint is violated;</li>
+<li>upserts users, repositories, PRs, and reviews;</li>
+<li>deduplicates reviews by GitHub review ID when available, otherwise by reviewer,
+state, and timestamp.</li>
+</ul>
+<p>This prevents duplicate users or PRs when a background audit and a webhook arrive
+together.</p>
+<h3 id="67-caching">6.7 Caching</h3>
+<p>Unauthenticated, non-refreshed audits are cached in memory for five minutes, with
+a maximum of 64 entries. Authenticated requests are not cached because the result
+depends on the user&#39;s token and permissions.</p>
+<hr>
+<h2 id="7-statistical-methodology">7. Statistical Methodology</h2>
+<h3 id="71-primary-outcome">7.1 Primary Outcome</h3>
+<p>For PR <em>i</em> in cohort <em>C</em>:</p>
+<pre><code class="language-text">eligible_at_i = first ready_for_review event, or created_at
+first_review_at_i = earliest non-bot human review
+Δt_i = (first_review_at_i − eligible_at_i) / 3600 hours
+</code></pre>
+<p>If no human review exists, Δt is the observed age at closure or audit time and the
+observation is right-censored.</p>
+<h3 id="72-scope-cohorts">7.2 Scope Cohorts</h3>
+<pre><code class="language-text">churn = additions + deletions
+Small   : churn ≤ 100    and files ≤ 5
+Medium  : churn ≤ 1000   and files ≤ 20
+Large   : above either medium threshold
+Unknown : diff metadata unavailable
+</code></pre>
+<p>The description-length thresholds (250 / 1,000 characters) are used only by the
+contributor Complexity Coach as drafting guidance, not by the statistical engine.</p>
+<h3 id="73-kaplanmeier-median">7.3 Kaplan–Meier Median</h3>
+<p>Records are sorted by time. At each event time:</p>
+<pre><code class="language-text">S(t) = S(t_prev) × (1 − events_at_t / at_risk_at_t)
+</code></pre>
+<p>The median is the first event time where <code>S(t) ≤ 0.5</code>; otherwise the median is
+reported as <code>median_not_reached</code>.</p>
+<h3 id="74-bootstrap-confidence-interval">7.4 Bootstrap Confidence Interval</h3>
+<p>When a cohort has at least 10 records and at least 5 events, the engine draws 500
+bootstrap resamples of the Kaplan–Meier median and reports the 2.5th and 97.5th
+percentiles as a 95% interval. If too few resamples produce a median, the interval
+is reported unavailable. This is a non-parametric interval, not a fabricated
+standard-error approximation.</p>
+<h3 id="75-huber-robust-regression">7.5 Huber Robust Regression</h3>
+<p>The model uses observed first reviews with complete scope and activity data:</p>
+<pre><code class="language-text">y_i = log(1 + Δt_i)
+x_i = [1, log1p(churn), log1p(files),
+       first_time_contributor, log1p(reviewer_activity_7d)]
+</code></pre>
+<p>A Huber M-estimator is fitted with iteratively reweighted least squares. Residuals
+are centered on the median and scaled by <code>1.4826 × MAD</code>. A PR is a triage signal
+when <code>|z| ≥ 2.5</code>, in either direction. The model requires at least 25 observations
+with variation; otherwise it reports <code>insufficient_data</code> or
+<code>insufficient_variation</code> instead of failing silently.</p>
+<h3 id="76-workload-adjusted-threshold">7.6 Workload-Adjusted Threshold</h3>
+<p>For each PR with a first reviewer and a ready time:</p>
+<ol>
+<li>Gather explicit <code>review_requested</code> events for that reviewer across sampled PRs.</li>
+<li>Count other sampled PRs that were open at this PR&#39;s ready time and had already
+requested that reviewer.</li>
+<li>Let that count be <em>Q</em>. Apply:</li>
+</ol>
+<pre><code class="language-text">Dynamic_Threshold = 1.5 + (0.15 × Q)
+threshold_hours = Dynamic_Threshold × cohort_median
+</code></pre>
+<p>A PR is workload-flagged when its first-review latency exceeds <code>threshold_hours</code>.
+The engine reports <code>request_coverage_pct</code>; if explicit review-request evidence is
+missing, the queue is not asserted and coverage is shown as low.</p>
+<h3 id="77-stage-metrics">7.7 Stage Metrics</h3>
+<ul>
+<li>Request → first review: from the latest review request before the first review.</li>
+<li>Author response after review: first author issue comment after the first review
+(a comment proxy, not a code-change measure).</li>
+<li>Approval → merge: from the latest approval to merge.</li>
+</ul>
+<h3 id="78-workload-summary">7.8 Workload Summary</h3>
+<p>For PRs with a first review, the engine reports:</p>
+<ul>
+<li>average and maximum recent reviewer activity;</li>
+<li>Pearson correlation between activity and first-review latency;</li>
+<li>OLS slope in hours per additional recent review;</li>
+<li>sample size and review-event count;</li>
+<li>an explicit definition of the proxy.</li>
+</ul>
+<h3 id="79-interpretation">7.9 Interpretation</h3>
+<p>The system reports <strong>process signals</strong>, not quality scores. A long latency may
+reflect queue pressure, unclear requirements, CI failures, time zones, or reviewer
+availability. A short latency does not prove a thorough review. This framing is
+implemented in the UI copy, the manager report, and the ethical safeguards view.</p>
+<hr>
+<h2 id="8-backend-implementation">8. Backend Implementation</h2>
+<h3 id="81-application-structure">8.1 Application Structure</h3>
+<p>The backend is a FastAPI application with 17 Python modules and approximately 3,426
+lines of code. Key modules:</p>
+<ul>
+<li><code>main.py</code> — application, endpoints, GitHub client, cache, CORS, sessions.</li>
+<li><code>statistical_engine.py</code> — all statistical calculations.</li>
+<li><code>persistence.py</code> — database mirror.</li>
+<li><code>webhooks.py</code> — signature verification and ingestion.</li>
+<li><code>auth.py</code> — encrypted server-side sessions.</li>
+<li><code>reporting.py</code> — PDF generation.</li>
+<li><code>models.py</code>, <code>database.py</code> — schema and engine.</li>
+</ul>
+<h3 id="82-api-endpoints">8.2 API Endpoints</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>GET</td>
+<td><code>/</code></td>
+<td>Service status and feature map</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/auth/github/login</code></td>
+<td>Start backend OAuth</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/auth/github/callback</code></td>
+<td>Validate state and create session</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/auth/me</code></td>
+<td>Current profile from bearer or session</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/auth/logout</code></td>
+<td>Revoke session</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/audit</code></td>
+<td>Paginated audit and statistics</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/history</code></td>
+<td>Persisted PR/review mirror</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/webhook/github</code></td>
+<td>Signed webhook ingestion</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/reports/pdf</code></td>
+<td>PDF export</td>
+</tr>
+</tbody></table>
+<p>Full request/response details appear in Appendix A.</p>
+<h3 id="83-authentication-and-rate-limits">8.3 Authentication and Rate Limits</h3>
+<p>Two authentication paths coexist:</p>
+<ol>
+<li><strong>Supabase OAuth</strong> (primary for deployment): the SPA obtains a GitHub
+<code>provider_token</code>, stores it, and sends it as <code>Authorization: Bearer</code>.</li>
+<li><strong>Backend OAuth fallback</strong>: <code>/auth/github/login</code> and callback create an encrypted
+<code>AuthSession</code>; the browser receives an HttpOnly session cookie.</li>
+</ol>
+<p>The audit endpoint uses the first available token: bearer header, session token, or
+<code>GITHUB_TOKEN</code>. Without a token, samples are capped at 25 PRs. OAuth sessions last
+30 days; tokens are encrypted with Fernet using a key derived from <code>SESSION_SECRET</code>.
+Session cookies use <code>SameSite=None</code> when <code>COOKIE_SECURE=true</code> so the Pages frontend
+can talk to Render cross-site.</p>
+<h3 id="84-parallel-enrichment-and-error-handling">8.4 Parallel Enrichment and Error Handling</h3>
+<p>GitHub requests time out after 20 seconds. Enrichment uses a thread pool to reduce
+wall-clock time. A 404 produces an actionable message; 403/429 responses expose rate
+limit reset information; network errors become 502 responses. A rate limit during
+enrichment marks the result partial rather than discarding the whole audit.</p>
+<h3 id="85-pdf-reporting">8.5 PDF Reporting</h3>
+<p><code>POST /api/reports/pdf</code> accepts the audit JSON and renders:</p>
+<ul>
+<li>repository and audit metadata;</li>
+<li>PR/merged/first-review/censoring counts;</li>
+<li>cohort baseline matrix with 95% intervals;</li>
+<li>robust triage signals;</li>
+<li>workload-adjusted threshold matrix;</li>
+<li>workload snapshot and interpretation notes.</li>
+</ul>
+<p>The exporter handles missing medians, missing intervals, and legacy payloads. The
+manager dashboard additionally supports native browser printing with a dedicated
+<code>@media print</code> stylesheet.</p>
+<h3 id="86-configuration">8.6 Configuration</h3>
+<p>Environment variables are documented in Appendix C. Production requires
+<code>DATABASE_URL</code>, <code>GITHUB_TOKEN</code>, <code>FRONTEND_URL</code>, <code>SESSION_SECRET</code>,
+<code>COOKIE_SECURE=true</code>, <code>GITHUB_WEBHOOK_SECRET</code>, and <code>PERSIST_AUDITS=true</code>.
+OAuth fallback credentials are optional when Supabase Auth is used.</p>
+<hr>
+<h2 id="9-frontend-implementation">9. Frontend Implementation</h2>
+<h3 id="91-routing">9.1 Routing</h3>
+<p>The SPA uses <code>react-router-dom</code> with <code>HashRouter</code>, which keeps deep links working on
+GitHub Pages without server rewrites. The Vite base path is <code>/revaudit/</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Route</th>
+<th>View</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>#/</code></td>
+<td>Landing page</td>
+</tr>
+<tr>
+<td><code>#/overview</code></td>
+<td>Repository overview and live audit metrics</td>
+</tr>
+<tr>
+<td><code>#/reviewer</code></td>
+<td>Smart Triage Queue</td>
+</tr>
+<tr>
+<td><code>#/contributor</code></td>
+<td>Contributor history, active PRs, Complexity Coach</td>
+</tr>
+<tr>
+<td><code>#/manager</code></td>
+<td>Print-ready manager report</td>
+</tr>
+<tr>
+<td><code>#/analysis</code></td>
+<td>Detailed review analysis</td>
+</tr>
+<tr>
+<td><code>#/patterns</code></td>
+<td>Detected patterns</td>
+</tr>
+<tr>
+<td><code>#/methodology</code></td>
+<td>Methodology and PlantUML</td>
+</tr>
+<tr>
+<td><code>#/presentation</code></td>
+<td>Presentation deck</td>
+</tr>
+<tr>
+<td><code>#/ethics</code></td>
+<td>Ethical safeguards</td>
+</tr>
+</tbody></table>
+<h3 id="92-authentication-gate">9.2 Authentication Gate</h3>
+<p><code>RequireAuth</code> wraps the three role routes. It waits for the backend session check,
+then:</p>
+<ul>
+<li>allows the route when a Supabase or backend user is present;</li>
+<li>otherwise shows a sign-in gate with a GitHub button;</li>
+<li>offers an explicitly labelled, session-scoped demo mode for local demonstrations.</li>
+</ul>
+<p>Important: this is authentication-aware routing, not role-based access control.
+Any authenticated user can open any role route. This gap is discussed in Section
+14.</p>
+<h3 id="93-repository-overview">9.3 Repository Overview</h3>
+<p>The overview preserves the project&#39;s dark analytical design: KPI cards, cohort
+baselines, latency charts, stage medians, and a flagged-anomaly table. It displays
+sample metadata, API authentication state, timeline coverage, and data-quality
+warnings.</p>
+<h3 id="94-reviewer-dashboard">9.4 Reviewer Dashboard</h3>
+<p>The Smart Triage Queue orders PRs by cohort (<code>Small → Medium → Large → Unknown</code>),
+then by open status and age. Small PRs are pinned to encourage rapid unblocking.
+Modes:</p>
+<ul>
+<li><strong>Actionable queue</strong> — open PRs without a first review;</li>
+<li><strong>All awaiting</strong> — all sampled PRs without a first review;</li>
+<li><strong>All sampled</strong> — every PR in the payload.</li>
+</ul>
+<p>Each row shows the author, cohort, age, first-review state, expected latency, queue
+at creation, workload multiplier, and a workload-adjusted signal badge.</p>
+<h3 id="95-contributor-dashboard">9.5 Contributor Dashboard</h3>
+<p>The contributor view accepts an exact GitHub username and also pre-fills the
+signed-in user. It displays:</p>
+<ul>
+<li>currently active PRs;</li>
+<li>median first-review latency;</li>
+<li>adjusted triage signals;</li>
+<li>a table of the contributor&#39;s sampled PRs with observed, expected, and censored
+states.</li>
+</ul>
+<p>The <strong>Complexity Coach</strong> provides live feedback on a draft description:</p>
+<ul>
+<li>under 250 characters → Small drafting range;</li>
+<li>250–1,000 → Medium;</li>
+<li>over 1,000 → Large warning with advice to split the change.</li>
+</ul>
+<p>The coach states explicitly that body length is a drafting heuristic; the engine&#39;s
+cohorts use changed lines and files.</p>
+<h3 id="96-manager-dashboard">9.6 Manager Dashboard</h3>
+<p>The manager report retains the size-stratified anomaly matrix and adds:</p>
+<ul>
+<li>robust triage matrix;</li>
+<li>workload-adjusted threshold matrix;</li>
+<li>lifecycle stage medians;</li>
+<li>workload and coverage KPIs;</li>
+<li>data-quality caveats.</li>
+</ul>
+<p><code>Print / Save as PDF</code> invokes the browser print dialog. The print stylesheet hides
+navigation, header, footer, and action buttons, converts backgrounds to white, and
+avoids page breaks inside tables and sections.</p>
+<h3 id="97-ux-resilience">9.7 UX Resilience</h3>
+<ul>
+<li>Skeleton loaders cover dashboard, queue, and table layouts.</li>
+<li>A cold-start toast appears after four seconds of loading with the message
+“Waking up analysis engine…” and explains the Render free-tier delay.</li>
+<li>Existing results remain visible during a refresh.</li>
+<li>Error states include actionable retry messages.</li>
+</ul>
+<h3 id="98-design-system">9.8 Design System</h3>
+<p>The UI uses a dark slate palette with orange accents, monospace numerics, and
+restrained motion. The design is consistent across existing and new views. The
+frontend contains approximately 6,867 lines of JSX/JS/CSS across 33 files.</p>
+<h3 id="99-data-flow">9.9 Data Flow</h3>
+<p><code>App.jsx</code> owns the audit state and current repository. It:</p>
+<ul>
+<li>fetches <code>/api/audit</code> with <code>getAuthHeaders()</code>;</li>
+<li>falls back to bundled sample data when the API is unavailable;</li>
+<li>forwards the Supabase provider token;</li>
+<li>handles PDF export and logout;</li>
+<li>observes Supabase auth events;</li>
+<li>resolves the backend <code>/api/auth/me</code> profile.</li>
+</ul>
+<hr>
+<h2 id="10-deployment-and-operations">10. Deployment and Operations</h2>
+<h3 id="101-supabase">10.1 Supabase</h3>
+<ul>
+<li>GitHub OAuth provider enabled with a dedicated GitHub OAuth App.</li>
+<li>Callback URL: <code>https://&lt;project-ref&gt;.supabase.co/auth/v1/callback</code>.</li>
+<li>Site URL and redirect allowlist include the Pages URL and local Vite URL.</li>
+<li>PostgreSQL is used for persistence; the backend connects through the Session
+pooler (<code>aws-1-ap-northeast-1.pooler.supabase.com:5432</code>) with <code>sslmode=require</code>.</li>
+<li>The anon/publishable key is used only in the browser; the service role key is not
+required by this application.</li>
+</ul>
+<h3 id="102-render">10.2 Render</h3>
+<p><code>render.yaml</code> defines a Python web service:</p>
+<pre><code class="language-yaml">rootDir: backend
+buildCommand: pip install -r requirements.txt
+startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+plan: free
+</code></pre>
+<p>Production environment variables are listed in Appendix C. The free tier
+cold-starts; the frontend masks this with the skeleton/toast.</p>
+<h3 id="103-github-pages">10.3 GitHub Pages</h3>
+<p><code>.github/workflows/deploy-frontend.yml</code> builds <code>frontend/</code> with Vite and publishes
+<code>frontend/dist</code> through <code>actions/deploy-pages</code>. Build-time variables:</p>
+<pre><code class="language-yaml">VITE_API_BASE_URL: https://revaudit-backend.onrender.com
+VITE_SUPABASE_URL: https://&lt;project-ref&gt;.supabase.co
+VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+</code></pre>
+<p>The workflow triggers on the <code>deploy</code> branch. Pages source must be <strong>GitHub
+Actions</strong>, not “Deploy from a branch”; the latter publishes the repository root and
+renders <code>README.md</code> with Jekyll instead of the React app.</p>
+<h3 id="104-webhooks">10.4 Webhooks</h3>
+<p>GitHub repository webhook:</p>
+<pre><code class="language-text">Payload URL: https://revaudit-backend.onrender.com/api/webhook/github
+Content type: application/json
+Secret: GITHUB_WEBHOOK_SECRET
+Events: Pull requests
+</code></pre>
+<p>Only <code>pull_request.closed</code> is processed. The handler verifies the HMAC, returns
+immediately, and ingests in the background.</p>
+<h3 id="105-local-development">10.5 Local Development</h3>
+<pre><code class="language-bash"># Backend
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn main:app --reload --port 8000
+
+# Frontend
+cd frontend
+npm install
+npm run dev
+</code></pre>
+<p>The UI is served at <code>http://localhost:5173/revaudit/</code>.</p>
+<h3 id="106-operational-checks">10.6 Operational Checks</h3>
+<ul>
+<li><code>GET /</code> returns service status and feature flags.</li>
+<li><code>/docs</code> exposes OpenAPI.</li>
+<li><code>/api/history</code> verifies persistence.</li>
+<li>A GitHub webhook ping verifies the secret and reachability.</li>
+<li><code>POST /api/reports/pdf</code> verifies report generation.</li>
+</ul>
+<hr>
+<h2 id="11-testing-and-verification">11. Testing and Verification</h2>
+<h3 id="111-strategy">11.1 Strategy</h3>
+<p>Testing combines:</p>
+<ol>
+<li>backend unit and integration tests using <code>unittest</code> and FastAPI&#39;s TestClient;</li>
+<li>static analysis and production builds for the frontend;</li>
+<li>browser-level end-to-end checks with headless Chrome;</li>
+<li>live GitHub API audits against public repositories;</li>
+<li>database checks against Supabase PostgreSQL;</li>
+<li>webhook signature and event-filter tests;</li>
+<li>PDF content and validity checks.</li>
+</ol>
+<h3 id="112-backend-test-inventory">11.2 Backend Test Inventory</h3>
+<p>22 tests pass. They cover:</p>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Coverage</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>test_phase1_auth.py</code></td>
+<td>Bearer extraction, audit token forwarding, auth profile</td>
+</tr>
+<tr>
+<td><code>test_phase2.py</code></td>
+<td>Link-header pagination, OAuth encryption/revocation, PDF output</td>
+</tr>
+<tr>
+<td><code>test_phase3_workload.py</code></td>
+<td>Queue reconstruction, threshold arithmetic, closed PR exclusion, missing median</td>
+</tr>
+<tr>
+<td><code>test_phase4_persistence.py</code></td>
+<td>Idempotent upsert, review deduplication, webhook HMAC, event filtering, review merging</td>
+</tr>
+<tr>
+<td><code>test_phase4_reporting.py</code></td>
+<td>v2 payload with null medians, legacy payload compatibility</td>
+</tr>
+</tbody></table>
+<h3 id="113-frontend-verification">11.3 Frontend Verification</h3>
+<ul>
+<li><code>oxlint</code> completes with no warnings.</li>
+<li><code>vite build</code> succeeds; the main bundle is approximately 707 KB (193 KB gzip).</li>
+<li>Headless Chrome checks confirm:<ul>
+<li>landing page renders;</li>
+<li>role routes show the auth gate;</li>
+<li>demo mode unlocks dashboards;</li>
+<li>triage queue orders Small first and shows pinned badges;</li>
+<li>complexity coach warns at 1,001 characters;</li>
+<li>manager workload matrix renders;</li>
+<li>print media hides sidebar/header;</li>
+<li>deep links resolve;</li>
+<li>no console errors.</li>
+</ul>
+</li>
+</ul>
+<h3 id="114-live-api-verification">11.4 Live API Verification</h3>
+<p>Small live samples were used to validate the pipeline:</p>
+<table>
+<thead>
+<tr>
+<th>Repository</th>
+<th align="right">Sample</th>
+<th align="right">Merged</th>
+<th align="right">First reviews</th>
+<th align="right">Censored</th>
+<th>Observation</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>fastapi/fastapi</code></td>
+<td align="right">10</td>
+<td align="right">7</td>
+<td align="right">0</td>
+<td align="right">10</td>
+<td>Cohorts populated; model correctly reported insufficient data</td>
+</tr>
+<tr>
+<td><code>django/django</code></td>
+<td align="right">8</td>
+<td align="right">0</td>
+<td align="right">3</td>
+<td align="right">5</td>
+<td>Median 1.39 h; workload coverage 0% produced an explicit warning</td>
+</tr>
+<tr>
+<td><code>pallets/flask</code></td>
+<td align="right">6</td>
+<td align="right">2</td>
+<td align="right">0</td>
+<td align="right">6</td>
+<td>All censored; cohorts still estimated</td>
+</tr>
+<tr>
+<td><code>kubernetes/kubernetes</code></td>
+<td align="right">4</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">4</td>
+<td>No first reviews in the recent sample</td>
+</tr>
+</tbody></table>
+<p>A larger <code>fastapi/fastapi</code> audit persisted 25 PRs to PostgreSQL and was returned by
+<code>/api/history</code>, confirming the persistence path.</p>
+<h3 id="115-webhook-verification">11.5 Webhook Verification</h3>
+<ul>
+<li>A valid HMAC with <code>X-GitHub-Event: ping</code> returned <code>200 {&quot;pong&quot;: true}</code>.</li>
+<li>An invalid signature returned <code>401</code>.</li>
+<li>An <code>opened</code> action was ignored; <code>closed</code> was queued.</li>
+<li>Missing <code>GITHUB_WEBHOOK_SECRET</code> returns <code>503</code> rather than accepting unverified
+events.</li>
+</ul>
+<h3 id="116-deployment-verification">11.6 Deployment Verification</h3>
+<ul>
+<li>Supabase <code>/auth/v1/settings</code> reports the GitHub provider enabled.</li>
+<li>The Supabase authorize endpoint redirects to GitHub with the correct client ID,
+callback, and scopes.</li>
+<li>PostgreSQL schema creation succeeds with all Phase 3 columns.</li>
+<li><code>VITE_SUPABASE_ANON_KEY</code> is configured for the Pages build.</li>
+<li>A full human OAuth login remains the final manual check.</li>
+</ul>
+<hr>
+<h2 id="12-results-and-discussion">12. Results and Discussion</h2>
+<h3 id="121-what-the-system-demonstrates">12.1 What the System Demonstrates</h3>
+<p>The implementation demonstrates four shifts from a naive review dashboard:</p>
+<ol>
+<li><strong>From merge time to first-review latency.</strong> The primary outcome isolates the
+review queue from implementation and merge policy.</li>
+<li><strong>From complete-case averages to censoring-aware estimation.</strong> Open and
+unreviewed PRs remain in the estimate instead of vanishing.</li>
+<li><strong>From raw size buckets to adjusted signals.</strong> Scope, experience, and recent
+reviewer activity are modeled explicitly.</li>
+<li><strong>From a single dashboard to role workflows.</strong> Contributors, reviewers, and
+managers see different tasks over the same data.</li>
+</ol>
+<h3 id="122-case-study-fastapifastapi">12.2 Case Study: <code>fastapi/fastapi</code></h3>
+<p>A 10-PR sample produced seven merged PRs, two closed unmerged, and one open PR. No
+first human review appeared in the sample, so all ten observations were censored.
+Cohorts were populated (Small 1, Medium 5, Large 1), but the robust model correctly
+reported insufficient data. A later 25-PR audit was persisted and served from
+<code>/api/history</code>.</p>
+<p>This case illustrates a strength of the design: the system does not invent a median
+when no events are observed. It reports censoring, coverage, and warnings instead of
+a false precision.</p>
+<h3 id="123-case-study-djangodjango">12.3 Case Study: <code>django/django</code></h3>
+<p>An 8-PR sample contained three observed first reviews (1.39 h, 0.77 h, 18.23 h) and
+five censored PRs. The observed median was 1.39 h. Workload coverage was 0% because
+no explicit <code>review_requested</code> events for the eventual first reviewer appeared in
+the sampled timeline, so the engine reported a low-coverage warning and did not
+assert a queue.</p>
+<p>This case shows the value and the limits of the workload proxy: absence of evidence
+is surfaced rather than treated as an empty queue.</p>
+<h3 id="124-case-study-palletsflask-and-kuberneteskubernetes">12.4 Case Study: <code>pallets/flask</code> and <code>kubernetes/kubernetes</code></h3>
+<p>Recent samples contained no first reviews, leaving all PRs censored. Cohort counts
+and warnings were still produced. The UI remains useful as a queue view, but no
+latency baseline is claimed. This is the correct statistical behaviour.</p>
+<h3 id="125-performance">12.5 Performance</h3>
+<ul>
+<li>Enrichment is parallelized in small batches to reduce wall-clock time.</li>
+<li>The five-minute cache avoids repeated identical audits.</li>
+<li>Postgres persistence runs after the response, so the dashboard is not blocked by
+database writes.</li>
+<li>The free Render tier introduces cold-start latency; skeletons and the toast make
+this visible rather than opaque.</li>
+<li>Schema creation against the pooled Postgres connection took several seconds on
+first startup, then reused the schema.</li>
+</ul>
+<h3 id="126-threats-to-validity">12.6 Threats to Validity</h3>
+<ul>
+<li><strong>Sampling bias.</strong> Recent PRs are not a random sample of repository history.</li>
+<li><strong>Incomplete review-request history.</strong> The queue proxy is bounded by the sampled
+window and explicit timeline events.</li>
+<li><strong>Team reviews.</strong> GitHub team review requests are not resolved to individuals.</li>
+<li><strong>Missing timelines.</strong> Rate limits or permissions can remove PRs from survival
+estimates.</li>
+<li><strong>Model assumptions.</strong> Huber regression describes association, not causation.</li>
+<li><strong>Small samples.</strong> Live validation samples were small; they demonstrate behaviour,
+not repository-level conclusions.</li>
+<li><strong>Role authorization.</strong> The role routes are not enforced by identity or backend
+permissions.</li>
+</ul>
+<hr>
+<h2 id="13-ethics-privacy-and-governance">13. Ethics, Privacy, and Governance</h2>
+<h3 id="131-blame-free-framing">13.1 Blame-Free Framing</h3>
+<p>The UI and report repeatedly state that signals describe process patterns, not
+individual performance. Shorter review time is not equated with better review, and
+longer review time is not attributed to a person&#39;s competence. The ethical
+safeguards view documents this boundary.</p>
+<h3 id="132-data-minimization">13.2 Data Minimization</h3>
+<p>The system stores public GitHub metadata, review events, and PR scope. It does not
+store code diffs or review comment bodies except when a webhook payload provides
+them. It does not post, approve, merge, or modify repositories.</p>
+<h3 id="133-token-security">13.3 Token Security</h3>
+<ul>
+<li>Backend OAuth tokens are encrypted with Fernet before storage.</li>
+<li>Session IDs are hashed before storage.</li>
+<li>Supabase provider tokens are stored in browser local storage for API calls; they
+are not sent to the backend database.</li>
+<li>Webhook requests are authenticated with HMAC-SHA256.</li>
+<li>Secrets are supplied through environment variables and excluded from version
+control.</li>
+</ul>
+<h3 id="134-access-control-gap">13.4 Access Control Gap</h3>
+<p>The current role system separates views by route and requires authentication, but it
+does not enforce role membership. A signed-in contributor can open the manager
+route. True RBAC would require a role source, per-route checks, and backend
+authorization. This is documented as a limitation rather than hidden.</p>
+<h3 id="135-data-retention">13.5 Data Retention</h3>
+<p>The database retains PR metadata and review events indefinitely unless an operator
+deletes them. A production deployment should define retention, deletion, and export
+policies, especially for private repositories.</p>
+<hr>
+<h2 id="14-limitations-and-future-work">14. Limitations and Future Work</h2>
+<h3 id="141-known-limitations">14.1 Known Limitations</h3>
+<ol>
+<li><strong>No true role-based access control.</strong> Routes are auth-gated but not role-gated.</li>
+<li><strong>Sampled queue proxy.</strong> Reviewer workload is reconstructed only from sampled PRs
+and explicit review requests.</li>
+<li><strong>Single-repository audit.</strong> Cross-repository and organization-level views are
+not implemented.</li>
+<li><strong>No GitHub App installation tokens.</strong> Webhooks use a personal token; private
+organization installations are not modeled.</li>
+<li><strong>No webhook retry queue.</strong> Failed background ingestions are not retried
+automatically.</li>
+<li><strong>No database migration framework.</strong> Schema evolution uses additive
+<code>ensure_schema</code> logic rather than Alembic migrations.</li>
+<li><strong>Legacy modules remain.</strong> <code>analytics.py</code> and parts of <code>github_client.py</code> are
+retained from earlier phases and are not on the live audit path.</li>
+<li><strong>Small live samples.</strong> Validation did not run a large statistical study.</li>
+</ol>
+<h3 id="142-future-work">14.2 Future Work</h3>
+<ul>
+<li>Implement RBAC with a <code>role</code> column or Supabase <code>app_metadata</code>, backend
+dependencies, and per-route guards.</li>
+<li>Add GitHub App installation tokens and webhook delivery verification/retries.</li>
+<li>Reconstruct a fuller reviewer assignment history from organization data.</li>
+<li>Add multi-repository and organization dashboards.</li>
+<li>Calibrate confidence intervals and validate the robust model on larger samples.</li>
+<li>Add Alembic migrations and a staging database.</li>
+<li>Add automated browser tests to CI.</li>
+<li>Add accessibility and internationalization audits.</li>
+<li>Add retention/deletion controls for private data.</li>
+</ul>
+<hr>
+<h2 id="15-conclusion">15. Conclusion</h2>
+<p>RevAudit replaces a flat time-to-merge metric with a censoring-aware measure of
+review queue latency. It controls for PR scope, models reviewer activity, reports
+uncertainty only when the data supports it, and separates the workflows of
+contributors, reviewers, and managers. The system is implemented end to end: GitHub
+ingestion, statistical analysis, relational persistence, signed webhooks, PDF
+reporting, managed authentication, and cloud deployment.</p>
+<p>The project also demonstrates the importance of honest negative results. When no
+first reviews are observed, the engine says so. When workload evidence is missing,
+it reports low coverage. When the robust model lacks support, it refuses to fit.
+Those choices make the dashboard less decorative and more trustworthy.</p>
+<p>The remaining work is clear: true role-based authorization, fuller assignment
+history, larger validation samples, and production hardening. The current system
+provides a solid, deployable foundation for those extensions.</p>
+<hr>
+<h2 id="16-references">16. References</h2>
+<ol>
+<li>GitHub REST API documentation. <a href="https://docs.github.com/en/rest">https://docs.github.com/en/rest</a></li>
+<li>Kaplan, E. L., &amp; Meier, P. (1958). Nonparametric Estimation from Incomplete
+Observations. <em>Journal of the American Statistical Association</em>.</li>
+<li>Efron, B., &amp; Tibshirani, R. J. (1993). <em>An Introduction to the Bootstrap</em>.</li>
+<li>Huber, P. J. (1964). Robust Estimation of a Location Parameter. <em>Annals of
+Mathematical Statistics</em>.</li>
+<li>FastAPI documentation. <a href="https://fastapi.tiangolo.com/">https://fastapi.tiangolo.com/</a></li>
+<li>SQLAlchemy documentation. <a href="https://docs.sqlalchemy.org/">https://docs.sqlalchemy.org/</a></li>
+<li>NumPy documentation. <a href="https://numpy.org/doc/">https://numpy.org/doc/</a></li>
+<li>React documentation. <a href="https://react.dev/">https://react.dev/</a></li>
+<li>Vite documentation. <a href="https://vitejs.dev/">https://vitejs.dev/</a></li>
+<li>Tailwind CSS documentation. <a href="https://tailwindcss.com/docs">https://tailwindcss.com/docs</a></li>
+<li>Supabase documentation. <a href="https://supabase.com/docs">https://supabase.com/docs</a></li>
+<li>Render documentation. <a href="https://render.com/docs">https://render.com/docs</a></li>
+<li>GitHub Pages documentation.
+<a href="https://docs.github.com/en/pages">https://docs.github.com/en/pages</a></li>
+<li>ReportLab documentation. <a href="https://docs.reportlab.com/">https://docs.reportlab.com/</a></li>
+</ol>
+<hr>
+<h2 id="appendix-a--api-reference">Appendix A — API Reference</h2>
+<h3 id="get-apiaudit"><code>GET /api/audit</code></h3>
+<p>Query parameters:</p>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Default</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>owner</code></td>
+<td>string</td>
+<td>required</td>
+<td>GitHub owner</td>
+</tr>
+<tr>
+<td><code>repo</code></td>
+<td>string</td>
+<td>required</td>
+<td>Repository name</td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td>int</td>
+<td>50</td>
+<td>1–200; unauth capped at 25</td>
+</tr>
+<tr>
+<td><code>refresh</code></td>
+<td>bool</td>
+<td>false</td>
+<td>Skip five-minute cache</td>
+</tr>
+</tbody></table>
+<p>Response highlights: <code>owner</code>, <code>repo</code>, <code>total_prs_in_sample</code>,
+<code>merged_prs_count</code>, <code>first_review_observed_count</code>,
+<code>first_review_censored_count</code>, <code>observed_median_first_review_hours</code>,
+<code>baseline_medians</code>, <code>anomalies</code>, <code>workload_summary</code>, <code>workload_engine</code>,
+<code>workload_anomalies</code>, <code>pull_requests</code>, <code>model</code>, <code>metadata</code>, <code>data_quality</code>.</p>
+<h3 id="get-apihistory"><code>GET /api/history</code></h3>
+<p>Query parameters: <code>owner</code>, <code>repo</code>, <code>limit</code> (1–500). Returns<code>stored</code>,
+<code>last_synced_at</code>, <code>stored_prs_count</code>, and persisted PR rows with review events.</p>
+<h3 id="post-apiwebhookgithub"><code>POST /api/webhook/github</code></h3>
+<p>Headers: <code>X-GitHub-Event</code>, <code>X-Hub-Signature-256</code>. Body: GitHub webhook JSON.
+Returns <code>queued</code> for <code>pull_request.closed</code>, <code>ignored</code> for other actions, <code>401</code> for
+invalid signatures, <code>503</code> when the secret is missing.</p>
+<h3 id="post-apireportspdf"><code>POST /api/reports/pdf</code></h3>
+<p>Body: audit payload. Returns <code>application/pdf</code> with a filename derived from
+owner/repo.</p>
+<hr>
+<h2 id="appendix-b--database-schema">Appendix B — Database Schema</h2>
+<pre><code class="language-text">repositories
+  id, owner, name, default_branch, last_synced_at, created_at, updated_at
+
+users
+  id, github_id, login, avatar_url, created_at
+
+pull_requests
+  id, repo_id, pr_number, title, author_id, state, body, body_length,
+  size_category, additions, deletions, changed_files, html_url,
+  created_at, merged_at, closed_at, first_review_at,
+  time_to_first_review_hours, reviewer_login, reviewer_workload,
+  reviewer_queue_at_creation, dynamic_threshold_ratio,
+  dynamic_threshold_hours, workload_ratio_to_median,
+  is_workload_anomaly, review_count, review_rounds, reviews_synced_at,
+  review_time_hours, is_anomaly, anomaly_ratio
+
+review_events
+  id, github_review_id, pr_id, reviewer_id, state, body,
+  submitted_at, reviewer_workload
+
+auth_sessions
+  id, session_hash, user_id, encrypted_access_token, expires_at, created_at
+</code></pre>
+<hr>
+<h2 id="appendix-c--environment-variables">Appendix C — Environment Variables</h2>
+<h3 id="backend">Backend</h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Required</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>DATABASE_URL</code></td>
+<td>production</td>
+<td>Postgres/SQLite connection</td>
+</tr>
+<tr>
+<td><code>GITHUB_TOKEN</code></td>
+<td>recommended</td>
+<td>Webhook follow-up and higher rate limit</td>
+</tr>
+<tr>
+<td><code>GITHUB_CLIENT_ID</code></td>
+<td>fallback OAuth</td>
+<td>Backend OAuth app</td>
+</tr>
+<tr>
+<td><code>GITHUB_CLIENT_SECRET</code></td>
+<td>fallback OAuth</td>
+<td>Backend OAuth secret</td>
+</tr>
+<tr>
+<td><code>GITHUB_REDIRECT_URI</code></td>
+<td>fallback OAuth</td>
+<td><code>.../auth/github/callback</code></td>
+</tr>
+<tr>
+<td><code>GITHUB_OAUTH_SCOPE</code></td>
+<td>optional</td>
+<td>OAuth scopes</td>
+</tr>
+<tr>
+<td><code>FRONTEND_URL</code></td>
+<td>production</td>
+<td>Full public frontend URL</td>
+</tr>
+<tr>
+<td><code>SESSION_SECRET</code></td>
+<td>production</td>
+<td>Session signing and token encryption key</td>
+</tr>
+<tr>
+<td><code>COOKIE_SECURE</code></td>
+<td>production</td>
+<td><code>true</code> for HTTPS cross-site cookies</td>
+</tr>
+<tr>
+<td><code>GITHUB_WEBHOOK_SECRET</code></td>
+<td>webhook</td>
+<td>HMAC secret</td>
+</tr>
+<tr>
+<td><code>PERSIST_AUDITS</code></td>
+<td>optional</td>
+<td><code>false</code> disables audit mirror</td>
+</tr>
+<tr>
+<td><code>GITHUB_MAX_PAGES</code></td>
+<td>optional</td>
+<td>Pagination bound</td>
+</tr>
+<tr>
+<td><code>GITHUB_REVIEW_MAX_PRS</code></td>
+<td>optional</td>
+<td>Review fetch bound</td>
+</tr>
+</tbody></table>
+<h3 id="frontend">Frontend</h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>VITE_API_BASE_URL</code></td>
+<td>Backend origin</td>
+</tr>
+<tr>
+<td><code>VITE_SUPABASE_URL</code></td>
+<td>Supabase project URL</td>
+</tr>
+<tr>
+<td><code>VITE_SUPABASE_ANON_KEY</code></td>
+<td>Public anon/publishable key</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="appendix-d--test-inventory">Appendix D — Test Inventory</h2>
+<pre><code class="language-text">backend/tests/test_phase1_auth.py
+  - bearer extraction
+  - audit token forwarding
+  - unauthenticated auth profile
+  - authenticated auth profile
+
+backend/tests/test_phase2.py
+  - Link-header pagination and sync stop
+  - OAuth session encryption/revocation
+  - PDF export header
+
+backend/tests/test_phase3_workload.py
+  - active queue widens threshold
+  - closed PRs excluded from queue
+  - empty queue enforces base threshold
+  - missing median skips threshold
+
+backend/tests/test_phase4_persistence.py
+  - audit persistence and idempotency
+  - incomplete payload ignored
+  - valid/invalid/missing webhook secret
+  - event filtering
+  - review merging and bot filtering
+
+backend/tests/test_phase4_reporting.py
+  - v2 payload with missing medians
+  - legacy payload compatibility
+</code></pre>
+<p>Run:</p>
+<pre><code class="language-bash">cd backend
+python -m unittest discover -s tests -v
+</code></pre>
+<hr>
+<h2 id="appendix-e--reproduction-guide">Appendix E — Reproduction Guide</h2>
+<pre><code class="language-bash"># Clone and install
+git clone https://github.com/adityaraj868/revaudit.git
+cd revaudit
+git checkout deploy
+
+# Backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r backend/requirements.txt
+cp backend/.env.example backend/.env
+# configure DATABASE_URL / SESSION_SECRET / tokens
+cd backend
+uvicorn main:app --reload --port 8000
+
+# Frontend
+cd ../frontend
+npm install
+cp .env.example .env
+# configure VITE_API_BASE_URL / Supabase values
+npm run dev
+
+# Tests
+cd ../backend
+python -m unittest discover -s tests -v
+
+# Production build
+cd ../frontend
+npm run build
+</code></pre>
+<hr>
+<h2 id="appendix-f--glossary">Appendix F — Glossary</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Right-censoring</strong></td>
+<td>The true event time is at least the observed time, but the event has not occurred</td>
+</tr>
+<tr>
+<td><strong>Kaplan–Meier</strong></td>
+<td>A non-parametric estimator of survival under censoring</td>
+</tr>
+<tr>
+<td><strong>Bootstrap</strong></td>
+<td>Resampling procedure used to estimate interval uncertainty</td>
+</tr>
+<tr>
+<td><strong>Huber regression</strong></td>
+<td>Robust regression that downweights large residuals</td>
+</tr>
+<tr>
+<td><strong>Cohort</strong></td>
+<td>A size bucket (Small/Medium/Large/Unknown)</td>
+</tr>
+<tr>
+<td><strong>Robust z</strong></td>
+<td>Residual standardized by median absolute deviation</td>
+</tr>
+<tr>
+<td><strong>Active queue</strong></td>
+<td>Sampled PRs open at a ready time with a review request for the eventual reviewer</td>
+</tr>
+<tr>
+<td><strong>Triage signal</strong></td>
+<td>A flagged PR for human process investigation, not a quality verdict</td>
+</tr>
+<tr>
+<td><strong>Demo mode</strong></td>
+<td>A session-scoped bypass for local demonstrations</td>
+</tr>
+</tbody></table>
+<hr>
+<p><em>End of report.</em></p>
+</main></body></html>

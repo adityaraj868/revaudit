@@ -24,6 +24,18 @@
 
 ---
 
+## 📄 Formal Report
+
+A complete, 38-page formal project report covering the problem statement,
+statistical methodology, architecture, implementation, deployment, testing,
+results, ethics, and future work:
+
+- [Formal report — PDF](docs/RevAudit_Formal_Report.pdf)
+- [Formal report — Markdown source](docs/FORMAL_REPORT.md)
+- [Formal report — HTML](docs/FORMAL_REPORT.html)
+
+---
+
 ## 🚀 Quickstart Guide
 
 ### 1. Backend (FastAPI & Statistical Engine)
