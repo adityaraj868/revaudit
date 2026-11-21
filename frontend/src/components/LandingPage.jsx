@@ -12,7 +12,7 @@ import {
   LogOut,
   Zap
 } from 'lucide-react';
-import iconSvgSrc from '../../../design/icon.svg';
+import logoMarkSrc from '../../../design/rev_audit_monogram.png';
 
 function GithubIcon({ className = "w-4 h-4" }) {
   return (
@@ -72,12 +72,12 @@ export default function LandingPage({
         {/* Minimal Transparent Top Navigation Layer */}
         <nav className="relative z-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full h-20 flex items-center justify-between">
           
-          {/* Brand with icon.svg */}
+          {/* Brand with RevAudit logo */}
           <div className="flex items-center space-x-3">
             <img 
-              src={iconSvgSrc || "/design/icon.svg"} 
+              src={logoMarkSrc || "/design/rev_audit_monogram.png"} 
               alt="RevAudit Logo" 
-              className="w-6 h-6 invert opacity-60 object-contain"
+              className="w-9 h-9 object-contain"
               onError={(e) => {
                 e.target.src = '/icon.svg';
               }}

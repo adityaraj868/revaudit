@@ -13,7 +13,7 @@ import {
   Scale,
   UserRound
 } from 'lucide-react';
-import iconSvgSrc from '../../../design/icon.svg';
+import logoMarkSrc from '../../../design/rev_audit_monogram.png';
 
 export default function Sidebar({ activeTab, onNavigate, anomaliesCount = 0, currentRepo = '' }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -89,10 +89,10 @@ export default function Sidebar({ activeTab, onNavigate, anomaliesCount = 0, cur
               >
                 <div className="flex items-center space-x-2">
                   <img 
-                    src={iconSvgSrc || "/design/icon.svg"} 
+                    src={logoMarkSrc || "/design/rev_audit_monogram.png"} 
                     alt="RevAudit Logo" 
-                    className="w-5 h-5 invert opacity-60 object-contain"
-                    onError={(e) => { e.target.src = '/icon.svg'; }}
+                    className="w-8 h-8 object-contain"
+                    onError={(e) => { e.target.src = '/design/rev_audit_monogram.png'; }}
                   />
                   <span className="font-semibold text-base tracking-tight text-white group-hover:text-orange-400 transition-colors">
                     RevAudit
@@ -132,10 +132,10 @@ export default function Sidebar({ activeTab, onNavigate, anomaliesCount = 0, cur
               title="Return to RevAudit Homepage"
             >
               <img 
-                src={iconSvgSrc || "/design/icon.svg"} 
+                src={logoMarkSrc || "/design/rev_audit_monogram.png"} 
                 alt="RevAudit Logo" 
-                className="w-5 h-5 invert opacity-60 group-hover:opacity-100 object-contain transition-opacity"
-                onError={(e) => { e.target.src = '/icon.svg'; }}
+                className="w-8 h-8 object-contain"
+                onError={(e) => { e.target.src = '/design/rev_audit_monogram.png'; }}
               />
             </button>
             <button
