@@ -298,30 +298,3 @@ Production runs the frontend on GitHub Pages and the API on Render:
   the same secret used by Render.
 
 See the Deployment section in `README.md` for the step-by-step setup.
-
-## 14. Browser extension
-
-A Manifest V3 extension in `extension/` provides a popup repository audit:
-
-1. `chrome.identity.launchWebAuthFlow` opens Supabase's GitHub authorize URL
-   with a PKCE code challenge.
-2. The service worker exchanges the returned code at
-   `/auth/v1/token?grant_type=pkce`.
-3. The session and GitHub `provider_token` are stored in
-   `chrome.storage.local`.
-4. Audits call `/api/audit` with the provider token as a bearer token.
-5. Expired sessions are refreshed with the refresh token.
-
-The extension ID is fixed by the public `key` in `manifest.json`
-(`iomendeapkpepmlapflpdjnogjapccff`), so the redirect URL is stable:
-
-```text
-https://iomendeapkpepmlapflpdjnogjapccff.chromiumapp.org/supabase
-```
-
-Add it to Supabase's redirect allowlist. The backend allows the extension origin
-through `EXTENSION_ORIGIN`. `extension/config.js` holds the public Supabase URL
-and anon key and is gitignored; `config.example.js` is the template.
-
-V1 is a popup only. It reads the active tab URL to detect the repository, does
-not inject content scripts, and does not enforce roles.

@@ -27,5 +27,3 @@ services:
         sync: false
       - key: PERSIST_AUDITS
         value: "true"
-      - key: EXTENSION_ORIGIN
-        value: chrome-extension://iomendeapkpepmlapflpdjnogjapccff
